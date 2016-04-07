@@ -1392,6 +1392,8 @@ Conversation.prototype._sendDistinctEvent = null;
  */
 Conversation.prototype._tempId = '';
 
+Conversation.prototype._fromIndexedDB = false;
+
 /**
  * Prefix to use when generating an ID for instances of this class
  * @type {String}

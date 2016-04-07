@@ -85,6 +85,7 @@ const LayerError = require('./layer-error');
 const Message = require('./message');
 const User = require('./user');
 const TypingIndicatorListener = require('./typing-indicators/typing-indicator-listener');
+const DbManager = require('./db-manager');
 const Util = require('./client-utils');
 const Root = require('./root');
 const ClientRegistry = require('./client-registry');
@@ -124,6 +125,10 @@ class Client extends ClientAuth {
 
     this._typingIndicators = new TypingIndicatorListener({
       clientId: this.appId,
+    });
+
+    this.dbManager = new DbManager({
+      client: this,
     });
 
     // Instantiate Plugins

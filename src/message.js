@@ -1202,6 +1202,8 @@ Message.prototype.localCreatedAt = null;
 
 Message.prototype._toObject = null;
 
+Message.prototype._fromIndexedDB = false;
+
 Message.prefixUUID = 'layer:///messages/';
 
 Message.inObjectIgnore = Syncable.inObjectIgnore;
