@@ -91,6 +91,23 @@ describe("The Client class", function() {
             // Restore
             layer.Client.prototype._connectionRestored = _connectionRestored;
         });
+
+        it("Should call _setupClientId", function() {
+          var _setupClientId =  layer.Client.prototype._setupClientId;
+            spyOn(layer.Client.prototype, "_setupClientId");
+
+            // Run
+            var client = new layer.Client({
+                appId: "Samunwise",
+                url: "https://huh.com"
+            });
+
+            // Posttest
+            expect(client._setupClientId).toHaveBeenCalled();
+
+            // Restore
+            layer.Client.prototype._setupClientId = _setupClientId;
+        });
     });
 
     describe("The _initComponents() method", function() {
@@ -102,6 +119,40 @@ describe("The Client class", function() {
         xit("Should have a test for plugins", function() {
 
         });
+    });
+
+    describe("The _setupClientId() method", function() {
+      beforeEach(function() {
+        client.destroy();
+        client = {
+          _onWindowUnload: function() {}
+        };
+      });
+      it("Should generate a UUID ID", function() {
+        layer.Client.prototype._setupClientId.apply(client);
+        expect(client.id.length > 12).toBe(true);
+      })
+
+      it("Should pop last ID from localStorage.layerClientIds and use it", function() {
+        window.localStorage.layerClientIds = '["abcdef"]';
+        layer.Client.prototype._setupClientId.apply(client);
+        expect(client.id).toEqual('abcdef');
+      });
+    });
+    describe("The _onWindowUnload() method", function() {
+      it("Should push ID into localStorage.layerClientIds on window unload", function() {
+        localStorage.layerClientIds = '["abcdef"]';
+        client.id = 'bcde';
+        client._onWindowUnload();
+        expect(localStorage.layerClientIds).toEqual('["abcdef","bcde"]');
+      });
+
+      it("Should set ID in localStorage.layerClientIds on window unload if unset", function() {
+        delete localStorage.layerClientIds;
+        client.id = 'bcde';
+        client._onWindowUnload();
+        expect(localStorage.layerClientIds).toEqual('["bcde"]');
+      });
     });
 
     describe("The _cleanup() method", function() {
@@ -145,6 +196,7 @@ describe("The Client class", function() {
 
         it("Should destroy all Queries", function() {
             // Setup
+            client._clientReady();
             var query = client.createQuery({});
 
             // Pretest
@@ -717,6 +769,7 @@ describe("The Client class", function() {
     describe("The _getObject() method", function() {
         var message, conversation, query;
         beforeEach(function() {
+            client._clientReady();
             conversation = client.createConversation(["a"]);
             message = conversation.createMessage("hey").send();
             query = client.createQuery({
@@ -780,10 +833,7 @@ describe("The Client class", function() {
 
             // Posttest
             expect(message).toBe(m);
-            expect(layer.Message._createFromServer).toHaveBeenCalledWith(messageObj, jasmine.any(layer.Conversation));
-            expect(layer.Message._createFromServer).toHaveBeenCalledWith(messageObj, jasmine.objectContaining({
-                id: messageObj.conversation.id
-            }));
+            expect(layer.Message._createFromServer).toHaveBeenCalledWith(messageObj, messageObj.conversation.id, client);
 
             // Restore
             layer.Message._createFromServer = tmp;
@@ -1020,6 +1070,7 @@ describe("The Client class", function() {
 
         it("Should reset query data", function() {
             // Setup
+            client._clientReady();
             client.createQuery({model: "Conversation"});
 
             // Run
@@ -1143,6 +1194,9 @@ describe("The Client class", function() {
     });
 
     describe("The createQuery() method", function() {
+        beforeEach(function() {
+          client._clientReady();
+        });
         it("Should return a Query from options", function() {
             var query = client.createQuery({
                 model: "Conversation"
@@ -1171,6 +1225,9 @@ describe("The Client class", function() {
     });
 
     describe("The getQuery() method", function() {
+        beforeEach(function() {
+          client._clientReady();
+        });
         it("Should throw an error if an invalid id is passed in", function() {
             expect(function() {
                 client.getQuery(5);
@@ -1195,6 +1252,9 @@ describe("The Client class", function() {
 
     // TODO: May want to break these up, but they form a fairly simple self contained test
     describe("The _checkCache(), _isCachedObject and _removeObject methods", function() {
+        beforeEach(function() {
+          client._clientReady();
+        });
         it("Should keep Conversations if they are in a Query and remove and destroy all others", function() {
             // Setup
             var query = client.createQuery({model: layer.Query.Conversation});
@@ -1275,6 +1335,7 @@ describe("The Client class", function() {
     describe("The _removeQuery() method", function() {
         var query, c1, c2, c3;
         beforeEach(function() {
+            client._clientReady();
             query = client.createQuery({model: "Conversation"});
             c1 = client.createConversation(["a"]);
             c2 = client.createConversation(["b"]);
@@ -1305,6 +1366,7 @@ describe("The Client class", function() {
     describe("The _connectionRestored() method", function() {
       var q1, q2, conversation;
       beforeEach(function() {
+         client._clientReady();
          conversation = client.createConversation(["a"]);
          q1 = client.createQuery({model: "Conversation"});
          q2 = client.createQuery({model: "Message", predicate: 'conversation.id = \'' + conversation.id + '\''});

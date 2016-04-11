@@ -85,7 +85,6 @@ const LayerError = require('./layer-error');
 const Message = require('./message');
 const User = require('./user');
 const TypingIndicatorListener = require('./typing-indicators/typing-indicator-listener');
-const DbManager = require('./db-manager');
 const Util = require('./client-utils');
 const Root = require('./root');
 const ClientRegistry = require('./client-registry');
@@ -108,6 +107,8 @@ class Client extends ClientAuth {
     this._tempMessagesHash = {};
     this._queriesHash = {};
 
+    this._setupClientId();
+
     if (!options.users) {
       this.users = [];
     } else {
@@ -119,16 +120,38 @@ class Client extends ClientAuth {
     this.on('online', this._connectionRestored.bind(this));
   }
 
+  _setupClientId() {
+    let ids = window.localStorage ? localStorage.layerClientIds : '';
+    if (ids) {
+      ids = JSON.parse(ids);
+      this.id = ids.pop();
+      localStorage.layerClientIds = JSON.stringify(ids);
+    }
+    if (!this.id) this.id = Util.generateUUID();
+
+    if (window.localStorage) {
+      this._onWindowUnload = this._onWindowUnload.bind(this);
+      window.addEventListener('unload', this._onWindowUnload);
+    }
+  }
+
+  _onWindowUnload() {
+    let updatedIds = window.localStorage.layerClientIds;
+    if (updatedIds) {
+      updatedIds = JSON.parse(updatedIds);
+    } else {
+      updatedIds = [];
+    }
+    updatedIds.push(this.id);
+    localStorage.layerClientIds = JSON.stringify(updatedIds);
+  }
+
   /* See parent method docs */
   _initComponents() {
     super._initComponents();
 
     this._typingIndicators = new TypingIndicatorListener({
       clientId: this.appId,
-    });
-
-    this.dbManager = new DbManager({
-      client: this,
     });
 
     // Instantiate Plugins
@@ -176,6 +199,8 @@ class Client extends ClientAuth {
   }
 
   destroy() {
+    window.removeEventListener('unload', this._onWindowUnload);
+
     // Cleanup all plugins
     Object.keys(Client.plugins).forEach(propertyName => {
       if (this[propertyName]) {
@@ -318,7 +343,7 @@ class Client extends ClientAuth {
       // see these as matching the query.
       Object.keys(this._messagesHash)
             .filter(id => this._messagesHash[id].conversationId === oldId)
-            .forEach(id => this._messagesHash[id].conversationId = conversation.id);
+            .forEach(id => (this._messagesHash[id].conversationId = conversation.id));
     }
   }
 
@@ -477,8 +502,7 @@ class Client extends ClientAuth {
   _createObject(obj) {
     switch (Util.typeFromID(obj.id)) {
       case 'messages': {
-        const conversation = this.getConversation(obj.conversation.id, true);
-        return Message._createFromServer(obj, conversation);
+        return Message._createFromServer(obj, obj.conversation.id, this);
       }
 
       case 'conversations': {
