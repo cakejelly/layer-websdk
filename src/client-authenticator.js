@@ -36,10 +36,12 @@ const WebsocketRequestManager = require('./websockets/request-manager');
 const LayerError = require('./layer-error');
 const OnlineManager = require('./online-state-manager');
 const SyncManager = require('./sync-manager');
+const DbManager = require('./db-manager');
 const { XHRSyncEvent, WebsocketSyncEvent } = require('./sync-event');
 const { ACCEPT, LOCALSTORAGE_KEYS } = require('./const');
 const atob = typeof window === 'undefined' ? require('atob') : window.atob;
 const logger = require('./logger');
+const Util = require('./client-utils');
 
 const MAX_XHR_RETRIES = 3;
 
@@ -93,10 +95,38 @@ class ClientAuthenticator extends Root {
 
     this.url = this.url.replace(/\/$/, '');
 
+    this._setupClientId();
+
     // If we've been provided with a user id as a parameter, attempt to restore the session.
     if (requestedUserId) {
       this._restoreLastSession(options, requestedUserId, cachedUserId);
     }
+  }
+
+  _setupClientId() {
+    let ids = window.localStorage ? localStorage.layerClientIds : '';
+    if (ids) {
+      ids = JSON.parse(ids);
+      this.id = ids.pop();
+      localStorage.layerClientIds = JSON.stringify(ids);
+    }
+    if (!this.id) this.id = Util.generateUUID();
+
+    if (window.localStorage) {
+      this._onWindowUnload = this._onWindowUnload.bind(this);
+      window.addEventListener('unload', this._onWindowUnload);
+    }
+  }
+
+  _onWindowUnload() {
+    let updatedIds = window.localStorage.layerClientIds;
+    if (updatedIds) {
+      updatedIds = JSON.parse(updatedIds);
+    } else {
+      updatedIds = [];
+    }
+    updatedIds.push(this.id);
+    localStorage.layerClientIds = JSON.stringify(updatedIds);
   }
 
   /**
@@ -169,6 +199,7 @@ class ClientAuthenticator extends Root {
     this.socketManager.destroy();
     this.socketChangeManager.destroy();
     this.socketRequestManager.destroy();
+    if (this.dbManager) this.dbManager.destroy();
   }
 
   /**
@@ -433,7 +464,7 @@ class ClientAuthenticator extends Root {
    *
    * @fires connected, authenticated
    */
-  _sessionTokenRestored(result) {
+  _sessionTokenRestored() {
     this.isConnected = true;
     this.trigger('connected');
     this.isAuthenticated = true;
@@ -469,6 +500,12 @@ class ClientAuthenticator extends Root {
    * @fires ready
    */
   _clientReady() {
+    if (!this.dbManager) {
+      this.dbManager = new DbManager({
+        client: this,
+        isDisabled: !this.enablePersistence,
+      });
+    }
     if (!this.isReady) {
       this.isReady = true;
       this.trigger('ready');
@@ -534,6 +571,7 @@ class ClientAuthenticator extends Root {
         localStorage.removeItem(LOCALSTORAGE_KEYS.SESSIONDATA + this.appId);
       }
     }
+    if (this.dbManager) this.dbManager.deleteTables();
     this.isConnected = false;
     this.isAuthenticated = false;
 
@@ -627,7 +665,7 @@ class ClientAuthenticator extends Root {
    * @method __adjustAppId
    * @param {string} value - New appId value
    */
-  __adjustAppId(value) {
+  __adjustAppId() {
     if (this.isConnected) throw new Error(LayerError.dictionary.cantChangeIfConnected);
   }
 
@@ -641,7 +679,7 @@ class ClientAuthenticator extends Root {
    * @method __adjustUserId
    * @param {string} value - New appId value
    */
-  __adjustUserId(value) {
+  __adjustUserId() {
     if (this.isConnected) throw new Error(LayerError.dictionary.cantChangeIfConnected);
   }
 
@@ -706,8 +744,8 @@ class ClientAuthenticator extends Root {
    * @return {layer.ClientAuthenticator} this
    */
   xhr(options, callback) {
-    if (typeof options.url === 'string') {
-      options.url = this._xhrFixRelativeUrls(options.url);
+    if (!options.sync || !options.sync.target) {
+      options.url = this._xhrFixRelativeUrls(options.url || '');
     }
 
     options.withCredentials = true;
@@ -959,6 +997,25 @@ ClientAuthenticator.prototype.syncManager = null;
  * @type {layer.OnlineStateManager}
  */
 ClientAuthenticator.prototype.onlineManager = null;
+
+/**
+ * To enable persistence on a trusted device, set this to true.
+ * @type {boolean}
+ */
+ClientAuthenticator.prototype.enablePersistence = true;
+
+/**
+ * Database Manager for read/write to IndexedDB
+ * @type {layer.DbManager}
+ */
+ClientAuthenticator.prototype.dbManager = null;
+
+/**
+ * Unique identifier for the client.
+ *
+ * This ID is used to differentiate this instance with instances that may run in other tabs of the browser.
+ */
+ClientAuthenticator.prototype.id = '';
 
 /**
  * Is true if the client is authenticated and connected to the server;

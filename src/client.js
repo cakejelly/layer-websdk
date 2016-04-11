@@ -107,8 +107,6 @@ class Client extends ClientAuth {
     this._tempMessagesHash = {};
     this._queriesHash = {};
 
-    this._setupClientId();
-
     if (!options.users) {
       this.users = [];
     } else {
@@ -118,32 +116,6 @@ class Client extends ClientAuth {
     this._initComponents();
 
     this.on('online', this._connectionRestored.bind(this));
-  }
-
-  _setupClientId() {
-    let ids = window.localStorage ? localStorage.layerClientIds : '';
-    if (ids) {
-      ids = JSON.parse(ids);
-      this.id = ids.pop();
-      localStorage.layerClientIds = JSON.stringify(ids);
-    }
-    if (!this.id) this.id = Util.generateUUID();
-
-    if (window.localStorage) {
-      this._onWindowUnload = this._onWindowUnload.bind(this);
-      window.addEventListener('unload', this._onWindowUnload);
-    }
-  }
-
-  _onWindowUnload() {
-    let updatedIds = window.localStorage.layerClientIds;
-    if (updatedIds) {
-      updatedIds = JSON.parse(updatedIds);
-    } else {
-      updatedIds = [];
-    }
-    updatedIds.push(this.id);
-    localStorage.layerClientIds = JSON.stringify(updatedIds);
   }
 
   /* See parent method docs */

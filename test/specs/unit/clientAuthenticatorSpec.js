@@ -95,6 +95,58 @@ describe("The Client Authenticator Class", function() {
             }, "Fred", "Joe");
             layer.ClientAuthenticator.prototype._restoreLastSession = tmp;
         });
+
+        it("Should call _setupClientId", function() {
+          var _setupClientId =  layer.Client.prototype._setupClientId;
+            spyOn(layer.Client.prototype, "_setupClientId");
+
+            // Run
+            var client = new layer.Client({
+                appId: "Samunwise",
+                url: "https://huh.com"
+            });
+
+            // Posttest
+            expect(client._setupClientId).toHaveBeenCalled();
+
+            // Restore
+            layer.Client.prototype._setupClientId = _setupClientId;
+        });
+    });
+
+    describe("The _setupClientId() method", function() {
+      beforeEach(function() {
+        client.destroy();
+        client = {
+          _onWindowUnload: function() {}
+        };
+      });
+      it("Should generate a UUID ID", function() {
+        layer.Client.prototype._setupClientId.apply(client);
+        expect(client.id.length > 12).toBe(true);
+      })
+
+      it("Should pop last ID from localStorage.layerClientIds and use it", function() {
+        window.localStorage.layerClientIds = '["abcdef"]';
+        layer.Client.prototype._setupClientId.apply(client);
+        expect(client.id).toEqual('abcdef');
+      });
+    });
+
+    describe("The _onWindowUnload() method", function() {
+      it("Should push ID into localStorage.layerClientIds on window unload", function() {
+        localStorage.layerClientIds = '["abcdef"]';
+        client.id = 'bcde';
+        client._onWindowUnload();
+        expect(localStorage.layerClientIds).toEqual('["abcdef","bcde"]');
+      });
+
+      it("Should set ID in localStorage.layerClientIds on window unload if unset", function() {
+        delete localStorage.layerClientIds;
+        client.id = 'bcde';
+        client._onWindowUnload();
+        expect(localStorage.layerClientIds).toEqual('["bcde"]');
+      });
     });
 
     describe("The _restoreUserId() method", function() {
@@ -621,6 +673,12 @@ describe("The Client Authenticator Class", function() {
         client._destroyComponents();
       });
 
+      it("Should initialize the dbManager", function() {
+        expect(client.dbManager).toBe(null);
+        client._clientReady();
+        expect(client.dbManager).toEqual(jasmine.any(layer.DbManager));
+      });
+
       it("Should trigger ready", function() {
         spyOn(client, "trigger");
         client._clientReady();
@@ -721,6 +779,13 @@ describe("The Client Authenticator Class", function() {
 
         afterEach(function() {
           client._destroyComponents();
+        });
+
+        it("Should call deleteTables", function() {
+          client._clientReady();
+          spyOn(client.dbManager, "deleteTables");
+          client._resetSession();
+          expect(client.dbManager.deleteTables).toHaveBeenCalledWith();
         });
 
         it("Should clear the sessionToken", function() {
@@ -858,6 +923,18 @@ describe("The Client Authenticator Class", function() {
         client.logLevel = 100;
         expect(client.logLevel).toEqual(100);
         client.logLevel = 0;
+      });
+    });
+
+    describe("The _destroyComponents() method", function() {
+       beforeEach(function() {
+          client._initComponents();
+      });
+      it("Should destroy dbManager", function() {
+        client._clientReady();
+        var dbManager = client.dbManager;
+        client._destroyComponents();
+        expect(dbManager.isDestroyed).toBe(true);
       });
     });
 });

@@ -22,6 +22,7 @@ module.exports = {
     ChangeManager: require('./src/websockets/change-manager'),
   },
   OnlineStateManager: require('./src/online-state-manager'),
+  DbManager: require('./src/db-manager'),
   Constants: require('./src/const'),
   Util: require('./src/client-utils'),
   TypingIndicators: require('./src/typing-indicators/typing-indicators'),

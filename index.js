@@ -28,6 +28,7 @@ layer.Websockets = {
   ChangeManager: require('./lib/websockets/change-manager'),
 };
 layer.OnlineStateManager = require('./lib/online-state-manager');
+layer.DbManager = require('./lib/db-manager');
 layer.Constants = require('./lib/const');
 layer.Util = require('./lib/client-utils');
 layer.TypingIndicators = require('./lib/typing-indicators/typing-indicators');

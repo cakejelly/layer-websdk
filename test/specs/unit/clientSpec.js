@@ -91,23 +91,6 @@ describe("The Client class", function() {
             // Restore
             layer.Client.prototype._connectionRestored = _connectionRestored;
         });
-
-        it("Should call _setupClientId", function() {
-          var _setupClientId =  layer.Client.prototype._setupClientId;
-            spyOn(layer.Client.prototype, "_setupClientId");
-
-            // Run
-            var client = new layer.Client({
-                appId: "Samunwise",
-                url: "https://huh.com"
-            });
-
-            // Posttest
-            expect(client._setupClientId).toHaveBeenCalled();
-
-            // Restore
-            layer.Client.prototype._setupClientId = _setupClientId;
-        });
     });
 
     describe("The _initComponents() method", function() {
@@ -119,40 +102,6 @@ describe("The Client class", function() {
         xit("Should have a test for plugins", function() {
 
         });
-    });
-
-    describe("The _setupClientId() method", function() {
-      beforeEach(function() {
-        client.destroy();
-        client = {
-          _onWindowUnload: function() {}
-        };
-      });
-      it("Should generate a UUID ID", function() {
-        layer.Client.prototype._setupClientId.apply(client);
-        expect(client.id.length > 12).toBe(true);
-      })
-
-      it("Should pop last ID from localStorage.layerClientIds and use it", function() {
-        window.localStorage.layerClientIds = '["abcdef"]';
-        layer.Client.prototype._setupClientId.apply(client);
-        expect(client.id).toEqual('abcdef');
-      });
-    });
-    describe("The _onWindowUnload() method", function() {
-      it("Should push ID into localStorage.layerClientIds on window unload", function() {
-        localStorage.layerClientIds = '["abcdef"]';
-        client.id = 'bcde';
-        client._onWindowUnload();
-        expect(localStorage.layerClientIds).toEqual('["abcdef","bcde"]');
-      });
-
-      it("Should set ID in localStorage.layerClientIds on window unload if unset", function() {
-        delete localStorage.layerClientIds;
-        client.id = 'bcde';
-        client._onWindowUnload();
-        expect(localStorage.layerClientIds).toEqual('["bcde"]');
-      });
     });
 
     describe("The _cleanup() method", function() {

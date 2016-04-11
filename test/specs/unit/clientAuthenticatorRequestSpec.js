@@ -17,7 +17,7 @@ describe("The Client Authenticator Requests", function() {
         jasmine.Ajax.install();
         requests = jasmine.Ajax.requests;
 
-        client = new layer.ClientAuthenticator({
+        client = new layer.Client({
             appId: appId,
             reset: true,
             url: "https://duh.com"
@@ -29,7 +29,7 @@ describe("The Client Authenticator Requests", function() {
     afterEach(function() {
         jasmine.clock().uninstall();
         jasmine.Ajax.uninstall();
-        client._destroyComponents();
+        client.destroy();
     });
 
     afterAll(function() {
@@ -120,7 +120,7 @@ describe("The Client Authenticator Requests", function() {
     });
 
     describe("The xhr() method", function() {
-        it("Should call _xhrFixRelativeUrls", function() {
+        it("Should call _xhrFixRelativeUrls if non-sync request", function() {
             // Setup
             spyOn(client, "_xhrFixRelativeUrls");
 
@@ -129,6 +129,36 @@ describe("The Client Authenticator Requests", function() {
 
             // Posttest
             expect(client._xhrFixRelativeUrls).toHaveBeenCalledWith("/conversations");
+        });
+
+        it("Should call _xhrFixRelativeUrls if sync request without target", function() {
+            // Setup
+            spyOn(client, "_xhrFixRelativeUrls");
+
+            // Run
+            client.xhr({
+              url: "/conversations",
+              sync: {}
+            });
+
+            // Posttest
+            expect(client._xhrFixRelativeUrls).toHaveBeenCalledWith("/conversations");
+        });
+
+        it("Should not call _xhrFixRelativeUrls if sync request with target", function() {
+            // Setup
+            spyOn(client, "_xhrFixRelativeUrls");
+
+            // Run
+            client.xhr({
+              url: "/conversations",
+              sync: {
+                target: "hey"
+              }
+            });
+
+            // Posttest
+            expect(client._xhrFixRelativeUrls).not.toHaveBeenCalled();
         });
 
         it("Should call _xhrFixHeaders", function() {
