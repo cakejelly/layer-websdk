@@ -268,10 +268,12 @@ class SocketManager extends Root {
    * @param  {Object} body - Signal body
    */
   sendSignal(body) {
-    this._socket.send(JSON.stringify({
-      type: 'signal',
-      body: body,
-    }));
+    if (this._isOpen()) {
+      this._socket.send(JSON.stringify({
+        type: 'signal',
+        body,
+      }));
+    }
   }
 
 
