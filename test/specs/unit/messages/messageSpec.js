@@ -1,5 +1,5 @@
 /* eslint-disable */
-describe("The Messages class", function() {
+describe("The Message class", function() {
     var appId = "Fred's App";
 
     var conversation,
@@ -337,12 +337,14 @@ describe("The Messages class", function() {
             expect(m.getConversation()).toEqual(conversation);
         });
 
-        it("Should return nothing", function() {
+        it("Should load the Conversation", function() {
             var m = new layer.Message({
                 conversationId: conversation.id + 'a',
                 client: client
             });
-            expect(m.getConversation()).toEqual(undefined);
+            var c = m.getConversation();
+            expect(c).toEqual(jasmine.any(layer.Conversation));
+            expect(c.syncState).toEqual(layer.Constants.SYNC_STATE.LOADING);
         });
     });
 
@@ -1158,20 +1160,75 @@ describe("The Messages class", function() {
                 parts: [{
                     mime_type: "actor/mime",
                     body: "I am a Mime"
-                }]
+                }],
+                notification: {
+                  text: "Hey"
+                }
             });
 
             // Posttest
             expect(client.sendSocketRequest)
-                .toHaveBeenCalledWith({
-                    method: 'POST',
-                    body: jasmine.any(Function),
-                    sync: {
-                      target: m.id,
-                      depends: jasmine.arrayContaining([m.conversationId, m.id])
+              .toHaveBeenCalledWith({
+                  method: 'POST',
+                  body: {
+                    method: 'Message.create',
+                    object_id: conversation.id,
+                    data: {
+                      parts: [{
+                        mime_type: "actor/mime",
+                        body: "I am a Mime"
+                      }],
+                      notification: {
+                        text: "Hey"
+                      }
                     }
-                  }, jasmine.any(Function));
+                  },
+                  sync: {
+                    target: m.id,
+                    depends: jasmine.arrayContaining([m.conversationId, m.id])
+                  }
+                }, jasmine.any(Function));
         });
+    });
+
+    describe("The _getSendData() method", function() {
+      var m;
+      beforeEach(function() {
+          m = conversation.createMessage("hello");
+          m.addPart({body: "there", mimeType: "text/plain"});
+      });
+
+      afterEach(function() {
+          m.destroy();
+      });
+      it("Should update the Conversation ID of a create request", function() {
+        m.conversationId = "new id";
+        expect(m._getSendData({
+          method: 'Message.create',
+          object_id: conversation.id,
+          data: {
+            parts: [{
+              mime_type: "actor/mime",
+              body: "I am a Mime"
+            }],
+            notification: {
+              text: "Hey"
+            }
+          }
+        })).toEqual({
+          method: 'Message.create',
+          object_id: 'new id',
+          data: {
+            parts: [{
+              mime_type: "actor/mime",
+              body: "I am a Mime"
+            }],
+            notification: {
+              text: "Hey"
+            }
+          }
+        });
+      });
     });
 
     describe("The _sendResult() method", function() {
@@ -1718,12 +1775,20 @@ describe("The Messages class", function() {
         });
 
 
-        it("Should add path to url", function() {
+        it("Should add path to url if not a sync request", function() {
             spyOn(client, "xhr");
             m.url = "https://doh.com/ray";
             options = {url: "/hey"};
             m._xhr(options);
             expect(options.url).toEqual("https://doh.com/ray/hey");
+        });
+
+        it("Should not add path to url if its a sync request", function() {
+            spyOn(client, "xhr");
+            m.url = "https://doh.com/ray";
+            options = {url: "/hey", sync: {}};
+            m._xhr(options);
+            expect(options.url).toEqual("/hey");
         });
 
         it("Should not require prefixed slash", function() {
@@ -1752,20 +1817,11 @@ describe("The Messages class", function() {
             spyOn(client, "xhr");
             m._xhr({url: "hey"});
             expect(client.xhr).toHaveBeenCalledWith(jasmine.objectContaining({
-                url: jasmine.any(Function),
+                url: '/hey',
                 sync: jasmine.any(Object)
             }), undefined);
         });
 
-        it("Should use a function that returns a url", function() {
-            var f;
-            spyOn(client, "xhr").and.callFake(function(args) {
-                f = args.url;
-            });
-            m._xhr({url: "hey"});
-            m.url = "http://dogs.eat.me";
-            expect(f()).toEqual("http://dogs.eat.me/hey");
-        });
     });
 
     describe("The _setupSyncObject() method", function() {
@@ -1890,11 +1946,6 @@ describe("The Messages class", function() {
     });
 
     describe("The _createFromServer() method", function() {
-        it("Should fail if no conversation", function() {
-            expect(function() {
-                layer.Message._createFromServer({});
-            }).toThrowError(layer.LayerError.dictionary.conversationMissing);
-        });
 
         it("Should call _populateFromServer if found", function() {
             // Setup
@@ -1905,7 +1956,7 @@ describe("The Messages class", function() {
                 url: "hey ho",
                 parts: [],
                 sender: {}
-            }, conversation).message;
+            }, conversation.id, client).message;
 
             // Posttest
             expect(m.url).toEqual("hey ho");
@@ -1920,7 +1971,7 @@ describe("The Messages class", function() {
                 id: "layer:///messages/m103",
                 parts: [],
                 sender: {}
-            }, conversation).message;
+            }, conversation.id, client).message;
 
             // Posttest
             expect(client.getMessage(m.id)).toBe(m);
@@ -1934,7 +1985,7 @@ describe("The Messages class", function() {
             spyOn(layer.Message.prototype, "_sendReceipt");
 
             // Run
-            var m = layer.Message._createFromServer(data, conversation).message;
+            var m = layer.Message._createFromServer(data, conversation.id, client).message;
 
             // Posttest
             expect(layer.Message.prototype._sendReceipt).toHaveBeenCalledWith('delivery');
@@ -1951,7 +2002,7 @@ describe("The Messages class", function() {
             spyOn(layer.Message.prototype, "recipientStatus");
 
             // Run
-            var m = layer.Message._createFromServer(data, conversation).message;
+            var m = layer.Message._createFromServer(data, conversation.id, client).message;
 
             // Posttest
             expect(layer.Message.prototype.recipientStatus).not.toHaveBeenCalledWith('delivery');
@@ -1967,7 +2018,7 @@ describe("The Messages class", function() {
             spyOn(client, "_triggerAsync");
 
             // Run
-            var m = layer.Message._createFromServer(data, conversation).message;
+            var m = layer.Message._createFromServer(data, conversation.id, client).message;
 
             // Posttest
             expect(client._triggerAsync).toHaveBeenCalledWith('messages:notify', { message: m });
@@ -1981,7 +2032,7 @@ describe("The Messages class", function() {
             spyOn(client, "_triggerAsync");
 
             // Run
-            var m = layer.Message._createFromServer(data, conversation).message;
+            var m = layer.Message._createFromServer(data, conversation.id, client).message;
 
             // Posttest
             expect(client._triggerAsync).not.toHaveBeenCalledWith('messages:notify', { message: m });
@@ -1995,7 +2046,7 @@ describe("The Messages class", function() {
             spyOn(client, "_triggerAsync");
 
             // Run
-            var m = layer.Message._createFromServer(data, conversation).message;
+            var m = layer.Message._createFromServer(data, conversation.id, client).message;
 
             // Posttest
             expect(client._triggerAsync).not.toHaveBeenCalledWith('messages:notify', { message: m });
@@ -2007,7 +2058,7 @@ describe("The Messages class", function() {
             spyOn(client, "_triggerAsync");
 
             // Run
-            var m = layer.Message._createFromServer(data, conversation).message;
+            var m = layer.Message._createFromServer(data, conversation.id, client).message;
 
             // Posttest
             expect(client._triggerAsync).not.toHaveBeenCalledWith('messages:notify', { message: m });
@@ -2202,8 +2253,8 @@ describe("The Messages class", function() {
             layer.Message._loadSuccess(m, client, data);
 
             // Posttest
-            expect(m.getConversation()).toBe(undefined);
-            expect(m.conversationId).toEqual(data.conversation.id);
+            expect(m.getConversation()).not.toBe(undefined);
+            expect(m.conversationId).toEqual(client.getConversation(data.conversation.id).id);
         });
 
         it("Should call messages:loaded", function() {

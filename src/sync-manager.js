@@ -56,10 +56,14 @@ class SyncManager extends Root {
    */
   constructor(options) {
     super(options);
+    this.client = options.client;
 
     // Note we do not store a pointer to client... it is not needed.
-    if (options.client) {
-      options.client.on('authenticated', this._processNextRequest, this);
+    if (this.client) {
+      this.client.on('ready', () => {
+        this._processNextRequest();
+        this._loadPersistedQueue();
+      }, this);
     }
     this.queue = [];
 
@@ -166,7 +170,7 @@ class SyncManager extends Root {
         if (this.socketManager && this.socketManager._isOpen()) {
           logger.debug(`Sync Manager Websocket Request Firing ${requestEvt.operation} on target ${requestEvt.target}`,
             requestEvt.toObject());
-          this.requestManager.sendRequest(requestEvt._getRequestData(),
+          this.requestManager.sendRequest(requestEvt._getRequestData(this.client),
               result => this._xhrResult(result, requestEvt));
           requestEvt.isFiring = true;
         } else {
@@ -175,7 +179,7 @@ class SyncManager extends Root {
       } else {
         logger.debug(`Sync Manager XHR Request Firing ${requestEvt.operation} ${requestEvt.target}`,
           requestEvt.toObject());
-        xhr(requestEvt._getRequestData(), result => this._xhrResult(result, requestEvt));
+        xhr(requestEvt._getRequestData(this.client), result => this._xhrResult(result, requestEvt));
         requestEvt.isFiring = true;
       }
     } else if (requestEvt && requestEvt.isFiring) {
@@ -282,7 +286,8 @@ class SyncManager extends Root {
         // sessionToken appears to no longer be valid; forward response
         // on to client-authenticator to process.
         // Do not retry nor advance to next request.
-        requestEvt.callback(result);
+        if (requestEvt.callback) requestEvt.callback(result);
+
         break;
       case 'serverRejectedRequest':
         // Server presumably did not like the arguments to this call
@@ -341,7 +346,7 @@ class SyncManager extends Root {
    */
   _xhrHandleServerError(result, logMsg) {
     // Execute all callbacks provided by the request
-    result.request.callback(result);
+    if (result.request.callback) result.request.callback(result);
     logger.error(logMsg, result.request);
     this.trigger('sync:error', {
       target: result.request.target,
@@ -504,6 +509,16 @@ class SyncManager extends Root {
     this.queue = null;
     super.destroy();
   }
+
+
+  _loadPersistedQueue() {
+    this.client.dbManager.loadSyncQueue(data => {
+      if (data.length) {
+        this.queue = this.queue.concat(data);
+        this._processNextRequest();
+      }
+    });
+  }
 }
 
 /**
@@ -532,6 +547,11 @@ SyncManager.prototype.onlineManager = null;
  * @type {layer.SyncEvent[]}
  */
 SyncManager.prototype.queue = null;
+
+/**
+ * Reference to the Client so that we can pass it to SyncEvents  which may need to lookup their targets
+ */
+SyncManager.prototype.client = null;
 
 /**
  * Maximum exponential backoff wait.

@@ -15,7 +15,8 @@
  * @class  layer.SyncEvent
  * @extends layer.Root
  */
-class SyncEvent  {
+const Utils = require('./client-utils');
+class SyncEvent {
   /**
    * Create a layer.SyncEvent.  See layer.ClientAuthenticator for examples of usage.
    *
@@ -31,6 +32,8 @@ class SyncEvent  {
       }
     }
     if (!this.depends) this.depends = [];
+    if (!this.id) this.id = 'layer:///syncevents/' + Utils.generateUUID();
+    if (!this.createdAt) this.createdAt = Date.now();
   }
 
   /**
@@ -51,9 +54,11 @@ class SyncEvent  {
    * @method _updateData
    * @private
    */
-  _updateData() {
-    if (typeof this.data === 'function') {
-      this.data = this.data();
+  _updateData(client) {
+    if (!this.target) return;
+    const target = client._getObject(this.target);
+    if (target && this.operation === 'POST' && target._getSendData) {
+      this.data = target._getSendData(this.data);
     }
   }
 
@@ -77,6 +82,10 @@ class SyncEvent  {
  */
 SyncEvent.prototype.operation = '';
 
+SyncEvent.prototype.fromDB = false;
+
+SyncEvent.prototype.createdAt = 0;
+
 
 /**
  * Indicates whether this request currently in-flight.
@@ -97,6 +106,9 @@ Object.defineProperty(SyncEvent.prototype, 'isFiring', {
     return Boolean(this.__isFiring && Date.now() - this.__firedAt < SyncEvent.FIRING_EXPIRIATION);
   },
 });
+
+SyncEvent.prototype.id = '';
+
 
 /**
  * Indicates whether the request completed successfully.
@@ -176,15 +188,16 @@ class XHRSyncEvent extends SyncEvent {
    * Actually it just returns the parameters needed to make the xhr call:
    *
    *      var xhr = require('./xhr');
-   *      xhr(event._getRequestData());
+   *      xhr(event._getRequestData(client));
    *
    * @method _getRequestData
+   * @param {layer.Client} client
    * @protected
    * @returns {Object}
    */
-  _getRequestData() {
-    this._updateUrl();
-    this._updateData();
+  _getRequestData(client) {
+    this._updateUrl(client);
+    this._updateData(client);
     return {
       url: this.url,
       method: this.method,
@@ -202,9 +215,11 @@ class XHRSyncEvent extends SyncEvent {
    * @method _updateUrl
    * @private
    */
-  _updateUrl() {
-    if (typeof this.url === 'function') {
-      this.url = this.url();
+  _updateUrl(client) {
+    if (!this.target) return;
+    const target = client._getObject(this.target);
+    if (target && !this.url.match(/^http(s)\:\/\//)) {
+      this.url = target._getUrl(this.url);
     }
   }
 
@@ -260,10 +275,11 @@ class WebsocketSyncEvent extends SyncEvent {
    *
    * @method _getRequestData
    * @private
+   * @param {layer.Client} client
    * @return {Object}
    */
-  _getRequestData() {
-    this._updateData();
+  _getRequestData(client) {
+    this._updateData(client);
     return this.data;
   }
 

@@ -1,10 +1,17 @@
 /*eslint-disable */
 describe("The SyncEvent Classes", function() {
+    var client;
+    var appId = "Fred's App";
     beforeEach(function() {
       jasmine.clock().install();
+      client = new layer.Client({
+            appId: appId,
+            url: "https://huh.com"
+      });
     });
     afterEach(function() {
       jasmine.clock().uninstall();
+      client.destroy();
     });
 
     describe("The SyncEvent Class", function() {
@@ -31,6 +38,22 @@ describe("The SyncEvent Classes", function() {
 
             it("Should initialize callback", function() {
                 expect(new layer.SyncEvent({callback: "callback"}).callback).toEqual("callback");
+            });
+
+            it("Should initialize an ID", function() {
+              expect(new layer.SyncEvent({data: "data"}).id).toMatch(/layer:\/\/\/syncevents\/.*/);
+            });
+
+            it("Should accept an ID", function() {
+              expect(new layer.SyncEvent({id: "id"}).id).toEqual("id");
+            });
+
+            it("Should generate a createdAt", function() {
+              expect(new layer.SyncEvent({id: "id"}).createdAt > 0).toBe(true);
+            });
+
+            it("Should accept a createdAt", function() {
+              expect(new layer.SyncEvent({createdAt: 5}).createdAt).toEqual(5);
             });
         });
 
@@ -67,21 +90,16 @@ describe("The SyncEvent Classes", function() {
         });
 
         describe("The _updateData() method", function() {
-            it("Should leave data alone if its not a function", function() {
+            it("Should call target._getSendData if there is a target", function() {
+                var c = client.createConversation(["hey"]);
                 var evt = new layer.SyncEvent({
-                    data: "hey"
+                    data: "hey",
+                    target: c.id,
+                    operation: "POST"
                 });
-                evt._updateData();
-                expect(evt.data).toEqual("hey");
-            });
-
-            it("Should update data if its a function", function() {
-                var evt = new layer.SyncEvent({
-                    data: function() {return "hey"}
-                });
-                expect(evt.data).not.toEqual("hey");
-                evt._updateData();
-                expect(evt.data).toEqual("hey");
+                spyOn(c, "_getSendData").and.returnValue({hey: "fred"});
+                evt._updateData(client);
+                expect(evt.data).toEqual({hey: "fred"});
             });
         });
     });
@@ -103,18 +121,18 @@ describe("The SyncEvent Classes", function() {
 
             it("Should call _updateData", function() {
                 spyOn(evt, "_updateData");
-                evt._getRequestData();
-                expect(evt._updateData).toHaveBeenCalledWith();
+                evt._getRequestData(client);
+                expect(evt._updateData).toHaveBeenCalledWith(client);
             });
 
             it("Should call _updateUrl", function() {
                 spyOn(evt, "_updateUrl");
-                evt._getRequestData();
-                expect(evt._updateUrl).toHaveBeenCalledWith();
+                evt._getRequestData(client);
+                expect(evt._updateUrl).toHaveBeenCalledWith(client);
             });
 
             it("Should return expected properties", function() {
-                expect(evt._getRequestData()).toEqual({
+                expect(evt._getRequestData(client)).toEqual({
                     url: "url",
                     data: "data",
                     headers: "headers",
@@ -125,7 +143,7 @@ describe("The SyncEvent Classes", function() {
         });
 
         describe("The _updateUrl() method", function() {
-            it("Should leave data alone if its not a function", function() {
+            it("Should leave data alone if no target", function() {
                 var evt = new layer.XHRSyncEvent({
                     url: "hey"
                 });
@@ -134,12 +152,15 @@ describe("The SyncEvent Classes", function() {
             });
 
             it("Should update url if its a function", function() {
+                var c = client.createConversation(['abc']);
+                spyOn(c, "_getUrl").and.returnValue("ho");
                 var evt = new layer.XHRSyncEvent({
-                    url: function() {return "hey"}
+                    url: "hey",
+                    target: c.id
                 });
-                expect(evt.url).not.toEqual("hey");
-                evt._updateUrl();
                 expect(evt.url).toEqual("hey");
+                evt._updateUrl(client);
+                expect(evt.url).toEqual("ho");
             });
 
         });

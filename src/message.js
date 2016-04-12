@@ -199,7 +199,7 @@ class Message extends Syncable {
    */
   getConversation() {
     if (this.conversationId) {
-      return ClientRegistry.get(this.clientId).getConversation(this.conversationId);
+      return ClientRegistry.get(this.clientId).getConversation(this.conversationId, true);
     }
   }
 
@@ -573,18 +573,21 @@ class Message extends Syncable {
     this.sentAt = new Date();
     client.sendSocketRequest({
       method: 'POST',
-      body: () => {
-        return {
-          method: 'Message.create',
-          object_id: conversation.id,
-          data,
-        };
+      body: {
+        method: 'Message.create',
+        object_id: conversation.id,
+        data,
       },
       sync: {
         depends: [this.conversationId, this.id],
         target: this.id,
       },
     }, (success, socketData) => this._sendResult(success, socketData));
+  }
+
+  _getSendData(data) {
+    data.object_id = this.conversationId;
+    return data;
   }
 
   /**
@@ -821,23 +824,17 @@ class Message extends Syncable {
     if (!conversation) throw new Error(LayerError.dictionary.conversationMissing);
 
     if (inUrl && !inUrl.match(/^(\/|\?)/)) options.url = inUrl = '/' + options.url;
+    if (!options.sync) options.url = this.url + options.url;
 
     // Setup sync structure
     options.sync = this._setupSyncObject(options.sync);
 
-    // Setup the url in case its not yet known
-    const getUrl = function getUrl() {
-      return this.url + (inUrl || '');
-    }.bind(this);
-
-    if (this.url) {
-      options.url = getUrl();
-    } else {
-      options.url = getUrl;
-    }
-
     client.xhr(options, callback);
     return this;
+  }
+
+  _getUrl(url) {
+    return this.url + (url || '');
   }
 
   _setupSyncObject(sync) {
@@ -915,13 +912,11 @@ class Message extends Syncable {
    * @protected
    * @static
    * @param  {Object} message - Server's representation of the message
-   * @param  {layer.Conversation} conversation - Conversation for the message
+   * @param  {string} conversationId - Conversation for the message
+   * @param  {layer.Client} client
    * @return {layer.Message}
    */
-  static _createFromServer(message, conversation) {
-    if (!(conversation instanceof Root)) throw new Error(LayerError.dictionary.conversationMissing);
-
-    const client = conversation.getClient();
+  static _createFromServer(message, conversationId, client) {
     const found = client.getMessage(message.id);
     let newMessage;
     if (found) {
@@ -930,9 +925,10 @@ class Message extends Syncable {
     } else {
       const fromWebsocket = message.fromWebsocket;
       newMessage = new Message({
+        conversationId,
         fromServer: message,
-        conversationId: conversation.id,
         clientId: client.appId,
+        _fromDB: message._fromDB,
         _notify: fromWebsocket && message.is_unread && message.sender.user_id !== client.userId,
       });
     }
@@ -1202,7 +1198,7 @@ Message.prototype.localCreatedAt = null;
 
 Message.prototype._toObject = null;
 
-Message.prototype._fromIndexedDB = false;
+Message.prototype._fromDB = false;
 
 Message.prefixUUID = 'layer:///messages/';
 

@@ -214,12 +214,7 @@ class Conversation extends Syncable {
 
     client.sendSocketRequest({
       method: 'POST',
-      body: function getRequestData() {
-        return {
-          method: 'Conversation.create',
-          data: this._getPostData(),
-        };
-      }.bind(this),
+      body: {}, // see _getSendData
       sync: {
         depends: this.id,
         target: this.id,
@@ -266,16 +261,19 @@ class Conversation extends Syncable {
    * looks NOW, not back when `send()` was called.  This method is called
    * by the layer.SyncManager to populate the POST data of the call.
    *
-   * @method _getPostData
+   * @method _getSendData
    * @private
-   * @return {Object} POST data for creating a Conversation
+   * @return {Object} Websocket data for the request
    */
-  _getPostData() {
+  _getSendData(data) {
     const isMetadataEmpty = Util.isEmpty(this.metadata);
     return {
-      participants: this.participants,
-      distinct: this.distinct,
-      metadata: isMetadataEmpty ? null : this.metadata,
+      method: 'Conversation.create',
+      data: {
+        participants: this.participants,
+        distinct: this.distinct,
+        metadata: isMetadataEmpty ? null : this.metadata,
+      }
     };
   }
 
@@ -375,7 +373,7 @@ class Conversation extends Syncable {
 
 
     if (conversation.last_message) {
-      this.lastMessage = Message._createFromServer(conversation.last_message, this).message;
+      this.lastMessage = Message._createFromServer(conversation.last_message, this.id, client).message;
     } else {
       this.lastMessage = null;
     }
@@ -833,7 +831,6 @@ class Conversation extends Syncable {
    * @return {layer.Conversation} this
    */
   _xhr(args, callback) {
-    let inUrl = args.url;
     const client = this.getClient();
 
     // Validation
@@ -842,8 +839,6 @@ class Conversation extends Syncable {
     if (!('url' in args)) throw new Error(LayerError.dictionary.urlRequired);
     if (args.method !== 'POST' && this.syncState === Constants.SYNC_STATE.NEW) return this;
 
-    if (args.url && !args.url.match(/^(\/|\?)/)) args.url = '/' + args.url;
-
     if (args.sync !== false) {
       if (!args.sync) args.sync = {};
       if (!args.sync.target) {
@@ -851,14 +846,8 @@ class Conversation extends Syncable {
       }
     }
 
-    inUrl = args.url;
-    const getUrl = () => this.url + (inUrl || '');
-
-    if (!this.url) {
-      args.url = getUrl;
-    } else {
-      args.url = getUrl();
-    }
+    if (args.url && !args.url.match(/^(\/|\?)/)) args.url = '/' + args.url;
+    if (!args.sync) args.url = this.url + args.url;
 
     if (args.method && args.method !== 'GET') {
       this._setSyncing();
@@ -872,6 +861,10 @@ class Conversation extends Syncable {
     });
 
     return this;
+  }
+
+  _getUrl(url) {
+    return this.url + (url || '');
   }
 
   /**
@@ -905,7 +898,9 @@ class Conversation extends Syncable {
       this.destroy();
     } else {
       // If successful, copy the properties into this object
+      this.isInitializing = true;
       this._populateFromServer(result.data);
+      this.isInitializing = false;
       this.getClient()._addConversation(this);
       this.trigger('conversations:loaded');
     }
@@ -1128,6 +1123,7 @@ class Conversation extends Syncable {
       newConversation = new Conversation({
         client,
         fromServer: conversation,
+        _fromDB: conversation._fromDB,
       });
     }
 
@@ -1392,7 +1388,7 @@ Conversation.prototype._sendDistinctEvent = null;
  */
 Conversation.prototype._tempId = '';
 
-Conversation.prototype._fromIndexedDB = false;
+Conversation.prototype._fromDB = false;
 
 /**
  * Prefix to use when generating an ID for instances of this class

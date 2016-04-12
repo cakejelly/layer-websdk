@@ -58,9 +58,11 @@ describe("The SyncManager Class", function() {
             syncManager.destroy();
         });
 
-        it("Should listen for client.authenticated", function() {
+        it("Should listen for client.ready", function() {
             var tmp = layer.SyncManager.prototype._processNextRequest;
-            spyOn(layer.SyncManager.prototype  ,"_processNextRequest");
+            spyOn(layer.SyncManager.prototype , "_processNextRequest");
+            spyOn(layer.SyncManager.prototype , "_loadPersistedQueue");
+
             var syncManager = new layer.SyncManager({
                 client: client,
                 onlineManager: client.onlineManager,
@@ -70,10 +72,11 @@ describe("The SyncManager Class", function() {
 
 
             // Run
-            client.trigger("authenticated");
+            client.trigger("ready");
 
             // Posttest
             expect(syncManager._processNextRequest).toHaveBeenCalled();
+            expect(syncManager._loadPersistedQueue).toHaveBeenCalledWith();
 
             // Restore
             layer.SyncManager.prototype._processNextRequest = tmp;
@@ -834,5 +837,59 @@ describe("The SyncManager Class", function() {
             expect(syncManager.queue).toEqual([request2]);
         });
     });
+    describe("The _loadPersistedQueue() method", function() {
+      beforeEach(function() {
+        client._clientReady();
+      });
 
+      it("Should append to the queue", function() {
+        // Setup
+        var request = new layer.XHRSyncEvent({
+            operation: "PATCH",
+            depends: ["fred"],
+            url: ''
+        });
+        var request2 = new layer.XHRSyncEvent({
+            operation: "PATCH",
+            depends: ["fred2"],
+            url: ''
+        });
+        syncManager.queue = [request];
+        spyOn(client.dbManager, "loadSyncQueue").and.callFake(function(callback) {
+          callback([request2]);
+        });
+
+        // Run
+        syncManager._loadPersistedQueue();
+
+        // Posttest
+        expect(syncManager.queue).toEqual([request, request2]);
+      });
+
+      it("Should call processNextRequest", function() {
+        // Setup
+        var request = new layer.XHRSyncEvent({
+            operation: "PATCH",
+            depends: ["fred"],
+            url: ''
+        });
+        var request2 = new layer.XHRSyncEvent({
+            operation: "PATCH",
+            depends: ["fred2"],
+            url: ''
+        });
+        syncManager.queue = [request];
+        spyOn(client.dbManager, "loadSyncQueue").and.callFake(function(callback) {
+          callback([request2]);
+        });
+        spyOn(syncManager, "_processNextRequest");
+
+        // Run
+        syncManager._loadPersistedQueue();
+
+        // Posttest
+        expect(syncManager._processNextRequest).toHaveBeenCalledWith();
+
+      });
+    });
 });
