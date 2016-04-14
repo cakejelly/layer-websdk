@@ -34,8 +34,7 @@ class DbManager extends Root {
       this.client.on('messages:delete', evt => this.deleteObjects('messages', [evt.target]));
     }
 
-    this.client.syncManager.on('sync:add', evt => this.writeSyncEvents([evt.request], false));
-    this.client.syncManager.on('sync:error sync:success sync:abort', evt => this.deleteObjects('sync-queue', [evt.request]));
+    this.client.syncManager.on('sync:add sync:abort sync:error', evt => this.writeSyncEvents([evt.request], false));
 
     if (!window.indexedDB) this.isDisabled = true;
     this._open();
@@ -321,7 +320,6 @@ class DbManager extends Root {
     // Load any Messages/Conversations that are targets of operations.
     // They may already be loaded, but we need to make sure.
     this.getObjects('messages', messageIds, messages => {
-      debugger;
       messages.forEach(message => this._createMessage(message));
       this.getObjects('conversations', conversationIds, conversations => {
         conversations.forEach(conversation => this._createConversation(conversation));
@@ -447,6 +445,15 @@ class DbManager extends Root {
             cursor.continue(sortedIds[index]);
           }
         };
+    });
+  }
+
+  claimSyncEvent(syncEvent, callback) {
+    this.onOpen(() => {
+      const transaction = this.db.transaction(['sync-queue'], 'readwrite');
+      const store = transaction.objectStore('sync-queue');
+      store.get(syncEvent.id).onsuccess = evt => callback(Boolean(evt.target.result));
+      store.delete(syncEvent.id);
     });
   }
 

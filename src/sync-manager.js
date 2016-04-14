@@ -166,26 +166,37 @@ class SyncManager extends Root {
     if (this.isDestroyed) return;
     const requestEvt = this.queue[0];
     if (this.isOnline() && requestEvt && !requestEvt.isFiring) {
-      if (requestEvt instanceof WebsocketSyncEvent) {
-        if (this.socketManager && this.socketManager._isOpen()) {
-          logger.debug(`Sync Manager Websocket Request Firing ${requestEvt.operation} on target ${requestEvt.target}`,
-            requestEvt.toObject());
-          this.requestManager.sendRequest(requestEvt._getRequestData(this.client),
-              result => this._xhrResult(result, requestEvt));
-          requestEvt.isFiring = true;
-        } else {
-          logger.debug('Sync Manager Websocket Request skipped; socket closed');
+      this._validateRequest(requestEvt, isValid => {
+        if (!isValid) {
+          this._removeRequest(requestEvt);
+          return this._processNextRequest();
         }
-      } else {
-        logger.debug(`Sync Manager XHR Request Firing ${requestEvt.operation} ${requestEvt.target}`,
-          requestEvt.toObject());
-        xhr(requestEvt._getRequestData(this.client), result => this._xhrResult(result, requestEvt));
-        requestEvt.isFiring = true;
-      }
+        if (requestEvt instanceof WebsocketSyncEvent) {
+          if (this.socketManager && this.socketManager._isOpen()) {
+            logger.debug(`Sync Manager Websocket Request Firing ${requestEvt.operation} on target ${requestEvt.target}`,
+              requestEvt.toObject());
+            this.requestManager.sendRequest(requestEvt._getRequestData(this.client),
+                result => this._xhrResult(result, requestEvt));
+            requestEvt.isFiring = true;
+          } else {
+            logger.debug('Sync Manager Websocket Request skipped; socket closed');
+          }
+        } else {
+          logger.debug(`Sync Manager XHR Request Firing ${requestEvt.operation} ${requestEvt.target}`,
+            requestEvt.toObject());
+          xhr(requestEvt._getRequestData(this.client), result => this._xhrResult(result, requestEvt));
+          requestEvt.isFiring = true;
+        }
+      });
     } else if (requestEvt && requestEvt.isFiring) {
       logger.debug(`Sync Manager processNext skipped; request still firing ${requestEvt.operation} ` +
         `on target ${requestEvt.target}`, requestEvt.toObject());
     }
+  }
+
+  _validateRequest(syncEvent, callback) {
+    if (this.client.dbManager.isDisabled) return callback(true);
+    this.client.dbManager.claimSyncEvent(syncEvent, isFound => callback(isFound));
   }
 
   /**
@@ -302,6 +313,11 @@ class SyncManager extends Root {
       case 'offline':
         this._xhrHandleConnectionError();
         break;
+    }
+
+    // Write the sync event back to the database if we haven't completed processing it
+    if (!this.client.dbManager.isDisabled && this.queue.indexOf(requestEvt) !== -1) {
+      this.client.dbManager.writeSyncEvents([requestEvt], false);
     }
   }
 
