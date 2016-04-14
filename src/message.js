@@ -197,9 +197,9 @@ class Message extends Syncable {
    * @method getConversation
    * @return {layer.Conversation}
    */
-  getConversation() {
+  getConversation(load) {
     if (this.conversationId) {
-      return ClientRegistry.get(this.clientId).getConversation(this.conversationId, true);
+      return ClientRegistry.get(this.clientId).getConversation(this.conversationId, load);
     }
   }
 
@@ -276,7 +276,7 @@ class Message extends Syncable {
     const client = this.getClient();
     if (client) {
       const userId = client.userId;
-      const conversation = this.getConversation();
+      const conversation = this.getConversation(false);
       if (conversation) {
         conversation.participants.forEach(participant => {
           if (!value[participant]) {
@@ -305,7 +305,7 @@ class Message extends Syncable {
    *
    */
   __updateRecipientStatus(status, oldStatus) {
-    const conversation = this.getConversation();
+    const conversation = this.getConversation(false);
     const client = this.getClient();
 
     if (!conversation || Util.doesObjectMatch(status, oldStatus)) return;
@@ -421,7 +421,7 @@ class Message extends Syncable {
     if (value) {
       this._sendReceipt(Constants.RECEIPT_STATE.READ);
       this._triggerAsync('messages:read');
-      const conversation = this.getConversation();
+      const conversation = this.getConversation(false);
       if (conversation) conversation.unreadCount--;
     }
   }
@@ -445,7 +445,7 @@ class Message extends Syncable {
         // to mark the message as read.
         this.__isRead = true;
         this._triggerAsync('messages:read');
-        const conversation = this.getConversation();
+        const conversation = this.getConversation(false);
         if (conversation) conversation.unreadCount--;
       }
     }
@@ -466,7 +466,8 @@ class Message extends Syncable {
    * @param {string} [type=read] - One of layer.Constants.RECEIPT_STATE.READ or layer.Constants.RECEIPT_STATE.DELIVERY
    */
   _sendReceipt(type) {
-    if (this.getConversation().participants.length === 0) return;
+    const conversation = this.getConversation(false);
+    if (!conversation || conversation.participants.length === 0) return;
     this._setSyncing();
     this._xhr({
       url: '/receipts',
@@ -495,13 +496,23 @@ class Message extends Syncable {
    */
   send(notification) {
     const client = this.getClient();
-    const conversation = this.getConversation();
+    if (!client) {
+      throw new Error(LayerError.dictionary.clientMissing);
+    }
+
+    const conversation = this.getConversation(true);
+
+    if (!conversation) {
+      throw new Error(LayerError.dictionary.conversationMissing);
+    }
 
     if (this.syncState !== Constants.SYNC_STATE.NEW) {
       throw new Error(LayerError.dictionary.alreadySent);
     }
-    if (!conversation) {
-      throw new Error(LayerError.dictionary.conversationMissing);
+
+
+    if (conversation.isLoading) {
+      return conversation.once('conversations:loaded', () => this.send(notification));
     }
 
     if (!this.parts || !this.parts.length) {
@@ -568,7 +579,7 @@ class Message extends Syncable {
    */
   _send(data) {
     const client = this.getClient();
-    const conversation = this.getConversation();
+    const conversation = this.getConversation(false);
 
     this.sentAt = new Date();
     client.sendSocketRequest({
@@ -712,7 +723,8 @@ class Message extends Syncable {
    * @method destroy
    */
   destroy() {
-    this.getClient()._removeMessage(this);
+    const client = this.getClient();
+    if (client) client._removeMessage(this);
     this.parts.forEach(part => part.destroy());
     this.__parts = null;
 
@@ -816,12 +828,10 @@ class Message extends Syncable {
     // initialize
     let inUrl = options.url;
     const client = this.getClient();
-    const conversation = this.getConversation();
 
     // Validatation
     if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
     if (!('url' in options)) throw new Error(LayerError.dictionary.urlRequired);
-    if (!conversation) throw new Error(LayerError.dictionary.conversationMissing);
 
     if (inUrl && !inUrl.match(/^(\/|\?)/)) options.url = inUrl = '/' + options.url;
     if (!options.sync) options.url = this.url + options.url;

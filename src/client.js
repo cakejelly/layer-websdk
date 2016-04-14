@@ -388,7 +388,7 @@ class Client extends ClientAuth {
         this._triggerAsync('messages:notify', { message });
         message._notify = false;
       }
-      const conversation = message.getConversation();
+      const conversation = message.getConversation(false);
       if (conversation && (!conversation.lastMessage || conversation.lastMessage.position < message.position)) {
         conversation.lastMessage = message;
       }
@@ -414,7 +414,7 @@ class Client extends ClientAuth {
       delete this._tempMessagesHash[message._tempId];
       if (!this._inCleanup) {
         this._triggerAsync('messages:remove', { messages: [message] });
-        const conv = message.getConversation();
+        const conv = message.getConversation(false);
         if (conv && conv.lastMessage === message) conv.lastMessage = null;
       }
     }

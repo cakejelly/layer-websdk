@@ -342,9 +342,19 @@ describe("The Message class", function() {
                 conversationId: conversation.id + 'a',
                 client: client
             });
-            var c = m.getConversation();
+            var c = m.getConversation(true);
             expect(c).toEqual(jasmine.any(layer.Conversation));
             expect(c.syncState).toEqual(layer.Constants.SYNC_STATE.LOADING);
+            expect(c.isLoading).toBe(true);
+        });
+
+        it("Should not load the Conversation", function() {
+            var m = new layer.Message({
+                conversationId: conversation.id + 'a',
+                client: client
+            });
+            var c = m.getConversation(false);
+            expect(c).toEqual(undefined);
         });
     });
 
@@ -992,13 +1002,33 @@ describe("The Message class", function() {
             m.destroy();
         });
 
-        it("Should fail if there is no conversation or client", function() {
+        it("Should fail if there is no  client", function() {
+            delete m.clientId;
+
+            // Run
+            expect(function() {
+                m.send();
+            }).toThrowError(layer.LayerError.dictionary.clientMissing);
+        });
+
+        it("Should fail if conversationId is missing", function() {
             delete m.conversationId;
 
             // Run
             expect(function() {
                 m.send();
             }).toThrowError(layer.LayerError.dictionary.conversationMissing);
+        });
+
+        it("Should load Conversation if missing", function() {
+            client._removeConversation(client.getConversation(m.conversationId));
+            expect(client.getConversation(m.conversationId)).toBe(undefined);
+
+            // Run
+             m.send();
+            var conversation = client.getConversation(m.conversationId);
+            expect(conversation).toEqual(jasmine.any(layer.Conversation));
+            expect(conversation.isLoading).toBe(true);
         });
 
         it("Should fail if its sending or sent", function() {
@@ -1757,16 +1787,6 @@ describe("The Message class", function() {
             }).toThrowError(layer.LayerError.dictionary.isDestroyed);
         });
 
-        it("Should throw an error if the message does not have a conversation", function() {
-            // Setup
-            m.conversationId = null;
-
-            // Run
-            expect(function() {
-                m._xhr({url: ""});
-            }).toThrowError(layer.LayerError.dictionary.conversationMissing);
-        });
-
         it("Should throw an error if the request fails to specify a url", function() {
             // Run
             expect(function() {
@@ -2253,8 +2273,8 @@ describe("The Message class", function() {
             layer.Message._loadSuccess(m, client, data);
 
             // Posttest
-            expect(m.getConversation()).not.toBe(undefined);
-            expect(m.conversationId).toEqual(client.getConversation(data.conversation.id).id);
+            expect(m.getConversation()).toBe(undefined);
+            expect(m.conversationId).toEqual(data.conversation.id);
         });
 
         it("Should call messages:loaded", function() {

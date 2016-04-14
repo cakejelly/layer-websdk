@@ -500,7 +500,13 @@ class SyncManager extends Root {
    * @param  {layer.SyncEvent} evt - Delete event that requires removal of other events
    */
   _purgeOnDelete(evt) {
-    this.queue = this.queue.filter(request => request.depends.indexOf(evt.target) === -1 || evt === request);
+    this.queue.filter(request => request.depends.indexOf(evt.target) !== -1 && evt !== request).forEach(requestEvt => {
+      this.trigger('sync:abort', {
+        target: requestEvt.target,
+        request: requestEvt,
+      });
+      this._removeRequest(requestEvt);
+    });
   }
 
 
@@ -618,6 +624,19 @@ SyncManager._supportedEvents = [
    * @param {layer.SyncEvent} evt - The request object
    */
   'sync:add',
+
+  /**
+   * A sync request has been canceled.
+   *
+   * Typically caused by a new SyncEvent that deletes the target of this SyncEvent
+   *
+   * @event
+   * @param {layer.SyncEvent} evt - The request object
+   * @param {Object} result
+   * @param {string} result.target - ID of the message/conversation/etc. being operated upon
+   * @param {layer.SyncEvent} result.request - The original request
+   */
+  'sync:abort',
 ].concat(Root._supportedEvents);
 
 Root.initClass(SyncManager);

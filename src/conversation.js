@@ -898,9 +898,7 @@ class Conversation extends Syncable {
       this.destroy();
     } else {
       // If successful, copy the properties into this object
-      this.isInitializing = true;
       this._populateFromServer(result.data);
-      this.isInitializing = false;
       this.getClient()._addConversation(this);
       this.trigger('conversations:loaded');
     }

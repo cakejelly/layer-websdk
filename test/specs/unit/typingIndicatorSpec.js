@@ -54,7 +54,7 @@ describe("The Typing Indicator Classes", function() {
             it("Should connect to client ready", function() {
                 var listener = client._typingIndicators;
                 spyOn(listener, "_clientReady");
-                client.trigger("ready");
+                client._clientReady();
                 expect(listener._clientReady).toHaveBeenCalledWith();
             });
         });
@@ -103,7 +103,7 @@ describe("The Typing Indicator Classes", function() {
             var listener, evt;
             beforeEach(function() {
                 listener = client._typingIndicators;
-                client.trigger("ready");
+                client._clientReady();
                 evt = {
                     type: "signal",
                     body: {
@@ -143,7 +143,7 @@ describe("The Typing Indicator Classes", function() {
             var listener, evt;
             beforeEach(function() {
                 listener = client._typingIndicators;
-                client.trigger("ready");
+                client._clientReady();
                 evt = {
                     type: "signal",
                     body: {
@@ -254,7 +254,7 @@ describe("The Typing Indicator Classes", function() {
             var listener, state;
             beforeEach(function() {
                 listener = client._typingIndicators;
-                client.trigger("ready");
+                client._clientReady();
                 listener.state = {
                     "layer:///conversations/myconv": {
                         users: {

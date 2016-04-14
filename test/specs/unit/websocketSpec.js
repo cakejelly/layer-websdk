@@ -423,7 +423,7 @@ describe("The Websocket Socket Manager Class", function() {
 
     describe("The sendSignal() method", function() {
         it("Should call _socket.send", function() {
-            jasmine.spy(websocketManager, "_isOpen").and.returnValue(true);
+            spyOn(websocketManager, "_isOpen").and.returnValue(true);
             websocketManager._socket.send = jasmine.createSpy('send');
             websocketManager.sendSignal({hey: "ho"});
             expect(websocketManager._socket.send).toHaveBeenCalledWith(JSON.stringify({
@@ -433,7 +433,7 @@ describe("The Websocket Socket Manager Class", function() {
         });
 
         it("Should not call _socket.send if not open", function() {
-            jasmine.spy(websocketManager, "_isOpen").and.returnValue(false);
+            spyOn(websocketManager, "_isOpen").and.returnValue(false);
             websocketManager._socket.send = jasmine.createSpy('send');
             websocketManager.sendSignal({hey: "ho"});
             expect(websocketManager._socket.send).not.toHaveBeenCalled();
