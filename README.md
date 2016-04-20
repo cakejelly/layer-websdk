@@ -74,7 +74,8 @@ To start using Layer's Web SDK, you need to initialize a client with your Layer 
 
 ```javascript
 var client = new layer.Client({
-    appId: LAYER_APP_ID
+    appId: LAYER_APP_ID,
+    isTrustedDevice: false
 });
 ```
 
@@ -289,11 +290,18 @@ Note that `evt.callback` must be called to provide the Layer Client with the ide
 
 ### Reusing the previous Authorization?
 
-When reloading a web page, the framework will try to restore the last session.  However, it will only do this **if** you provide a `userId` parameter AND if that parameter matches the name associated with the last session:
+If the client receives the `isTrustedDevice` property, then it will store your user's last Session Token in localStorage.
+
+When reloading a web page, the framework will try to restore the last session.  However, it will only do this if:
+
+1. `isTrustedDevice` is true
+2. A `userId` property is provided
+3. The `userId` property matches the userId of the last user to login
 
 ```javascript
 var client = new layer.Client({
     appId: LAYER_APP_ID,
+    isTrustedDevice: true,
     userId: 'Frodo_the_Dodo'
 });
 ```
