@@ -83,10 +83,14 @@ class WebsocketChangeManager {
    * @param  {Object} msg
    */
   _handleDelete(msg) {
-    const entity = this._getObject(msg);
-    if (entity) {
-      entity._deleted();
-      entity.destroy();
+    if (msg.data.mode === 'my_devices' && msg.data.from_position) {
+      this.client._purgeMessagesByPosition(msg.object.id, msg.data.from_position);
+    } else {
+      const entity = this._getObject(msg);
+      if (entity) {
+        entity._deleted();
+        entity.destroy();
+      }
     }
   }
 

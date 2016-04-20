@@ -273,11 +273,11 @@ describe("The Query Class", function() {
             expect(query.data).toEqual([]);
         });
 
-        it("Should call _checkCache", function() {
-            spyOn(client, "_checkCache");
+        it("Should call _checkAndPurgeCache", function() {
+            spyOn(client, "_checkAndPurgeCache");
             query.data = [conversation];
             query._reset();
-            expect(client._checkCache).toHaveBeenCalledWith([conversation]);
+            expect(client._checkAndPurgeCache).toHaveBeenCalledWith([conversation]);
         });
 
         it("Should reset paginationWindow", function() {
@@ -353,7 +353,7 @@ describe("The Query Class", function() {
             var data = query.data;
             spyOn(query, "_runConversation");
             spyOn(query, "_runMessage");
-            spyOn(client, "_checkCache");
+            spyOn(client, "_checkAndPurgeCache");
             spyOn(query, "_triggerAsync");
 
             // Run
@@ -361,7 +361,7 @@ describe("The Query Class", function() {
 
             // Posttest
             expect(query.data.length).toEqual(10);
-            expect(client._checkCache).toHaveBeenCalledWith(data.slice(10));
+            expect(client._checkAndPurgeCache).toHaveBeenCalledWith(data.slice(10));
             expect(query._runConversation).not.toHaveBeenCalled();
             expect(query._runMessage).not.toHaveBeenCalled();
             expect(query._triggerAsync).toHaveBeenCalledWith("change", {data: []});
@@ -370,7 +370,7 @@ describe("The Query Class", function() {
         it("Should call _runConversation if the model is Conversation", function() {
             spyOn(query, "_runConversation");
             spyOn(query, "_runMessage");
-            spyOn(client, "_checkCache");
+            spyOn(client, "_checkAndPurgeCache");
             spyOn(query, "trigger");
             query.data = [message];
 
@@ -378,7 +378,7 @@ describe("The Query Class", function() {
             query._run();
 
             // Posttest
-            expect(client._checkCache).not.toHaveBeenCalled();
+            expect(client._checkAndPurgeCache).not.toHaveBeenCalled();
             expect(query._runConversation).toHaveBeenCalledWith(14);
             expect(query._runMessage).not.toHaveBeenCalled();
             expect(query.trigger).not.toHaveBeenCalled();
@@ -389,7 +389,7 @@ describe("The Query Class", function() {
             query.predicate = 'conversation.id = "fred"';
             spyOn(query, "_runConversation");
             spyOn(query, "_runMessage");
-            spyOn(client, "_checkCache");
+            spyOn(client, "_checkAndPurgeCache");
             spyOn(query, "trigger");
             query.data = [message];
 
@@ -397,7 +397,7 @@ describe("The Query Class", function() {
             query._run();
 
             // Posttest
-            expect(client._checkCache).not.toHaveBeenCalled();
+            expect(client._checkAndPurgeCache).not.toHaveBeenCalled();
             expect(query._runMessage).toHaveBeenCalledWith(14);
             expect(query._runConversation).not.toHaveBeenCalled();
             expect(query.trigger).not.toHaveBeenCalled();

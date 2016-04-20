@@ -169,6 +169,9 @@ describe("Websocket tests", function() {
                     "object": {
                         "type": "Conversation",
                         "id": convId1
+                    },
+                    data: {
+                      mode: "all_participants"
                     }
                 }
             })});
@@ -212,6 +215,9 @@ describe("Websocket tests", function() {
                 "object": {
                     "type": "Conversation",
                     "id": c2.id
+                },
+                data: {
+                  mode: "all_participants"
                 },
                 "timestamp": "2015-01-19T09:15:43+00:00"
             });
@@ -544,6 +550,9 @@ describe("Websocket tests", function() {
                     "type": "Message",
                     "url": client.url + m.id.replace(/layer\:\/\//,""),
                     id: m.id
+                },
+                data: {
+                  mode: "all_participants"
                 }
             });
 

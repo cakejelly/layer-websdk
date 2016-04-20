@@ -671,34 +671,32 @@ class Message extends Syncable {
    * @param {number} deletionMode - layer.Constants.DELETION_MODE.ALL is only supported mode at this time
    */
   delete(mode) {
-    if (this.isDestroyed) {
-      throw new Error(LayerError.dictionary.isDestroyed);
+    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
+
+    let queryStr;
+    switch (mode) {
+      case Constants.DELETION_MODE.ALL:
+      case true:
+        queryStr = 'mode=all_participants';
+        break;
+      case Constants.DELETION_MODE.MY_DEVICES:
+        queryStr = 'mode=my_devices';
+        break;
+      default:
+        throw new Error(LayerError.dictionary.deletionModeUnsupported);
     }
 
-    const modeValue = 'true';
-    if (mode === true) {
-      logger.warn('Calling Message.delete without a mode is deprecated');
-      mode = Constants.DELETION_MODE.ALL;
-    }
-    if (!mode || mode !== Constants.DELETION_MODE.ALL) {
-      throw new Error(LayerError.dictionary.deletionModeUnsupported);
-    }
-
-    if (this.syncState !== Constants.SYNC_STATE.NEW) {
-      const id = this.id;
-      const client = this.getClient();
-      this._xhr({
-        url: '?destroy=' + modeValue,
-        method: 'DELETE',
-      }, result => {
-        if (!result.success) Message.load(id, client);
-      });
-    }
+    const id = this.id;
+    const client = this.getClient();
+    this._xhr({
+      url: '?' + queryStr,
+      method: 'DELETE',
+    }, result => {
+      if (!result.success && (!result.data || result.data.id !== 'not_found')) Message.load(id, client);
+    });
 
     this._deleted();
     this.destroy();
-
-    return this;
   }
 
   /**

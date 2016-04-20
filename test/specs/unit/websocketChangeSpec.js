@@ -187,6 +187,9 @@ describe("The Websocket Change Manager Class", function() {
             changeManager._handleDelete({
                 object: {
                     id: "fred"
+                },
+                data: {
+                  mode: "all_participants"
                 }
             });
 
@@ -205,12 +208,49 @@ describe("The Websocket Change Manager Class", function() {
             changeManager._handleDelete({
                 object: {
                     id: "fred"
+                },
+                data: {
+                  mode: "my_devices"
                 }
             });
 
             // Posttest
             expect(m._deleted).not.toHaveBeenCalled();
             expect(m.destroy).not.toHaveBeenCalled();
+        });
+
+        it("Should not destroy the object if from_position has a value", function() {
+          // Run
+          changeManager._handleDelete({
+              object: {
+                  id: "fred"
+              },
+              data: {
+                mode: 'my_devices',
+                from_position: 5
+              }
+          });
+
+          // Posttest
+          expect(m.isDestroyed).toBe(false);
+        });
+
+        it("Should call client._purgeMessagesByPosition if from_position has a value", function() {
+          spyOn(client, "_purgeMessagesByPosition");
+
+          // Run
+          changeManager._handleDelete({
+              object: {
+                  id: "fred"
+              },
+              data: {
+                mode: 'my_devices',
+                from_position: 5
+              }
+          });
+
+          // Posttest
+          expect(client._purgeMessagesByPosition).toHaveBeenCalledWith("fred", 5);
         });
     });
 

@@ -1398,8 +1398,15 @@ describe("The Message class", function() {
             }).toThrowError(layer.LayerError.dictionary.isDestroyed);
         });
 
+        it("Should fail if invalid deletion mode", function() {
+            // Run
+            expect(function() {
+                m.delete(false);
+            }).toThrowError(layer.LayerError.dictionary.deletionModeUnsupported);
+        });
 
-        it("Should call _xhr", function() {
+
+        it("Should call _xhr for ALL", function() {
             // Setup
             spyOn(m, "_xhr");
 
@@ -1408,7 +1415,35 @@ describe("The Message class", function() {
 
             // Posttest
             expect(m._xhr).toHaveBeenCalledWith({
-                url: '?destroy=true',
+                url: '?mode=all_participants',
+                method: 'DELETE'
+            }, jasmine.any(Function));
+        });
+
+        it("Should treat true as ALL for backwards compatibility", function() {
+            // Setup
+            spyOn(m, "_xhr");
+
+            // Run
+            m.delete(true);
+
+            // Posttest
+            expect(m._xhr).toHaveBeenCalledWith({
+                url: '?mode=all_participants',
+                method: 'DELETE'
+            }, jasmine.any(Function));
+        });
+
+        it("Should call _xhr for my_devices if MY_DEVICES", function() {
+            // Setup
+            spyOn(m, "_xhr");
+
+            // Run
+            m.delete(layer.Constants.DELETION_MODE.MY_DEVICES);
+
+            // Posttest
+            expect(m._xhr).toHaveBeenCalledWith({
+                url: '?mode=my_devices',
                 method: 'DELETE'
             }, jasmine.any(Function));
         });
@@ -1433,7 +1468,7 @@ describe("The Message class", function() {
             expect(m.isDestroyed).toBe(true);
         });
 
-        it("Should load a new copy if deletion fails", function() {
+        it("Should load a new copy if deletion fails from something other than not_found", function() {
           var tmp = layer.Message.load;
           spyOn(layer.Message, "load");
           spyOn(m, "_xhr").and.callFake(function(args, callback) {
@@ -1447,6 +1482,25 @@ describe("The Message class", function() {
           // Posttest
           expect(m.isDestroyed).toBe(true);
           expect(layer.Message.load).toHaveBeenCalledWith(m.id, client);
+
+          // Cleanup
+          layer.Message.load = tmp;
+        })
+
+        it("Should NOT load a new copy if deletion fails from not_found", function() {
+          var tmp = layer.Message.load;
+          spyOn(layer.Message, "load");
+          spyOn(m, "_xhr").and.callFake(function(args, callback) {
+            callback({success: false, data: {id: 'not_found'}});
+          });
+
+
+          // Run
+          m.delete(layer.Constants.DELETION_MODE.ALL);
+
+          // Posttest
+          expect(m.isDestroyed).toBe(true);
+          expect(layer.Message.load).not.toHaveBeenCalled();
 
           // Cleanup
           layer.Message.load = tmp;

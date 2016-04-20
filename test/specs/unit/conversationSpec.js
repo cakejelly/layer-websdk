@@ -1071,14 +1071,60 @@ describe("The Conversation Class", function() {
         });
     });
 
-    describe("The delete() method", function() {
+    describe("The leave() method", function() {
+      it("Should fail if already deleted", function() {
+        conversation.isDestroyed = true;
+        expect(function() {
+          conversation.leave();
+        }).toThrowError(layer.LayerError.dictionary.isDestroyed);
+      });
+      it("Should call _delete", function() {
+        spyOn(conversation, "_delete");
+        conversation.leave();
+        expect(conversation._delete).toHaveBeenCalledWith("mode=my_devices&leave=true");
+      });
+    });
 
+    describe("The delete() method", function() {
+      it("Should fail if already deleted", function() {
+        conversation.isDestroyed = true;
+        expect(function() {
+          conversation.delete(layer.Constants.DELETION_MODE.ALL);
+        }).toThrowError(layer.LayerError.dictionary.isDestroyed);
+      });
+
+      it("Should fail if invalid deletion mode", function() {
+        expect(function() {
+          conversation.delete(false);
+        }).toThrowError(layer.LayerError.dictionary.deletionModeUnsupported);
+      });
+
+      it("Should handle deletion mode true for backwards compatability", function() {
+        spyOn(conversation, "_delete");
+        conversation.delete(true);
+        expect(conversation._delete).toHaveBeenCalledWith('mode=all_participants');
+      });
+
+      it("Should handle deletion mode ALL", function() {
+        spyOn(conversation, "_delete");
+        conversation.delete(layer.Constants.DELETION_MODE.ALL);
+        expect(conversation._delete).toHaveBeenCalledWith('mode=all_participants');
+      });
+
+      it("Should handle deletion mode MY_DEVICE", function() {
+        spyOn(conversation, "_delete");
+        conversation.delete(layer.Constants.DELETION_MODE.MY_DEVICES);
+        expect(conversation._delete).toHaveBeenCalledWith('mode=my_devices&leave=false');
+      });
+    });
+
+    describe("The _delete() method", function() {
         it("Should call _deleted", function() {
             // Setup
             spyOn(conversation, "_deleted");
 
             // Run
-            conversation.delete(layer.Constants.DELETION_MODE.ALL);
+            conversation._delete('mode=hey&leave=ho');
 
             // Posttest
             expect(conversation._deleted).toHaveBeenCalledWith();
@@ -1089,7 +1135,7 @@ describe("The Conversation Class", function() {
             spyOn(conversation, "destroy");
 
             // Run
-            conversation.delete(layer.Constants.DELETION_MODE.ALL);
+            conversation._delete('mode=hey&leave=ho');
 
             // Posttest
             expect(conversation.destroy).toHaveBeenCalled();
@@ -1101,29 +1147,46 @@ describe("The Conversation Class", function() {
             spyOn(conversation, "_xhr");
 
             // Run
-            conversation.delete(layer.Constants.DELETION_MODE.ALL);
+            conversation._delete('mode=hey&leave=ho');
 
             // Posttest
             expect(conversation._xhr).toHaveBeenCalledWith({
-                url: "?destroy=true",
+                url: "?mode=hey&leave=ho",
                 method: "DELETE"
             }, jasmine.any(Function));
         });
 
-        it("Should load a new copy if deletion fails", function() {
+        it("Should load a new copy if deletion fails without not_found", function() {
           var tmp = layer.Conversation.load;
           spyOn(layer.Conversation, "load");
           spyOn(conversation, "_xhr").and.callFake(function(args, callback) {
             callback({success: false});
           });
 
-
           // Run
-          conversation.delete(layer.Constants.DELETION_MODE.ALL);
+          conversation._delete('mode=hey&leave=ho');
 
           // Posttest
           expect(conversation.isDestroyed).toBe(true);
           expect(layer.Conversation.load).toHaveBeenCalledWith(conversation.id, client);
+
+          // Cleanup
+          layer.Conversation.load = tmp;
+        })
+
+        it("Should not load a new copy if deletion fails with not_found", function() {
+          var tmp = layer.Conversation.load;
+          spyOn(layer.Conversation, "load");
+          spyOn(conversation, "_xhr").and.callFake(function(args, callback) {
+            callback({success: false, data: {id: 'not_found'}});
+          });
+
+          // Run
+          conversation._delete('mode=hey&leave=ho');
+
+          // Posttest
+          expect(conversation.isDestroyed).toBe(true);
+          expect(layer.Conversation.load).not.toHaveBeenCalled();
 
           // Cleanup
           layer.Conversation.load = tmp;

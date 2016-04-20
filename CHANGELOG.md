@@ -2,6 +2,8 @@
 
 ## 1.1.0
 
+#### Public API Changes
+
 * Deduplication
   * If a response is not received to a request to create a Conversation or Message, it will be retried with deduplication support to insure that if it was created before, a duplicate is not created on retry.
   * Message and Conversation IDs no longer change as they are created.  Note: A Conversation ID can change if creating a Distinct Conversation and a matching Conversation is found on the server -- in this case, the ID will change from the proposed ID to the ID of the matching Conversation.
@@ -12,6 +14,30 @@
   * Client initialization no longer takes a `userId` parameter, and no longer immediately begins the authentication process
   * layer.Client.connect is now called to start authentication
   * layer.Client.login has been removed; see layer.Client.connect instead
+* layer.Constants
+  * Adds layer.Constants.DELETION_MODE.MY_DEVICES for layer.Message.delete() and layer.Conversation.delete()
+* layer.Conversation
+  * Support for Deletion with either layer.Constants.DELETION_MODE.MY_DEVICES or layer.Constants.DELETION_MODE.ALL (delete for all users or just for me).  Note that deleting for just me doesn't remove me as a participant, which means that new Messages will cause the Conversation to reappear.
+  * Adds layer.Conversation.leave() to leave a Conversation and remove it from my Conversation list.  New Messages will NOT cause the Conversation to reappear.
+* layer.Message
+  * Support for Deletion with either layer.Constants.DELETION_MODE.MY_DEVICES or layer.Constants.DELETION_MODE.ALL (delete for all users or just for me).  Note that deleting for just me doesn't remove me as a participant, which means that new Messages will cause the Conversation to reappear.
+  * layer.Message.getConversation now supports a boolean parameter to load from server if Conversation is not cached.
+
+#### Bug Fixes
+
+* Caching Fixes
+  * Updates Caching to uncache any Messages and Conversations that aren't part of any Query's results 10 minutes (configurable) after websocket event announces their arrival.
+  * Removes Conversation.lastMessage from cache once its no longer a query result.
+  * Fixes cache cleanup on deleting a Query.
+
+## 1.0.0
+
+* Updated version number and language from beta to GA
+
+## 0.9.3
+
+* Minor bug fix to layer.Query
+
 ## 0.9.2
 
 #### Public API Changes
