@@ -9,11 +9,12 @@ describe("SyncManager Integration Tests", function() {
         requests = jasmine.Ajax.requests;
         client = new layer.Client({
             appId: appId,
-            url: "https://huh.com"
+            url: "https://huh.com",
+            isTrustedDevice: false
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
-
+        client._clientReady();
         conversation = client._createObject(responses.conversation1).conversation;
         requests.reset();
         client.syncManager.queue = [];
@@ -39,6 +40,7 @@ describe("SyncManager Integration Tests", function() {
             callback: function() {}
         });
         syncManager.queue = [request];
+
     });
 
     afterAll(function() {
@@ -73,6 +75,7 @@ describe("SyncManager Integration Tests", function() {
                 data: {}
             });
             jasmine.clock().tick(5002);
+            client.onlineManager.isOnline = true;
         }
 
         syncManager._xhrError({

@@ -5,48 +5,8 @@
  */
 
 const LayerParser = require('layer-patch');
-/* istanbul ignore next */
-const cryptoLib = typeof window !== 'undefined' ? window.crypto || window.msCrypto : null;
+const uuid = require('uuid');
 
-let getRandomValues;
-/* istanbul ignore next */
-if (typeof window === 'undefined') {
-  getRandomValues = require('get-random-values');
-} else if (cryptoLib) {
-  getRandomValues = cryptoLib.getRandomValues.bind(cryptoLib);
-}
-
-/*
- * Generate a random UUID for modern browsers and nodejs
- */
-function cryptoUUID() {
-  const buf = new Uint16Array(8);
-  getRandomValues(buf);
-  const s4 = (num) => {
-    let ret = num.toString(16);
-    while (ret.length < 4) {
-      ret = '0' + ret;
-    }
-    return ret;
-  };
-  return (
-    s4(buf[0]) + s4(buf[1]) + '-' + s4(buf[2]) + '-' +
-    s4(buf[3]) + '-' + s4(buf[4]) + '-' + s4(buf[5]) +
-    s4(buf[6]) + s4(buf[7]));
-}
-
-/*
- * Generate a random UUID in IE10
- */
-function mathUUID() {
-  function s4() {
-    return Math.floor((1 + Math.random()) * 0x10000)
-      .toString(16)
-      .substring(1);
-  }
-  return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
-    s4() + '-' + s4() + s4() + s4();
-}
 
 /**
  * Generate a random UUID
@@ -54,7 +14,7 @@ function mathUUID() {
  * @method
  * @return {string}
  */
-exports.generateUUID = getRandomValues ? cryptoUUID : mathUUID;
+exports.generateUUID = uuid.v4;
 
 
 /**
@@ -198,13 +158,11 @@ let parser;
  * @param {Object} request - see layer.ClientUtils.layerParse
  */
 function createParser(request) {
-  request.client.once('destroy', () => parser = null);
+  request.client.once('destroy', () => (parser = null));
 
   parser = new LayerParser({
     camelCase: true,
-    getObjectCallback: (id) => {
-      return request.client._getObject(id);
-    },
+    getObjectCallback: (id) => request.client._getObject(id),
     propertyNameMap: {
       Conversation: {
         unreadMessageCount: 'unreadCount',

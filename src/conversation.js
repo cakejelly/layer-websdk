@@ -187,9 +187,17 @@ class Conversation extends Syncable {
     if (message) {
       // Setting a position is required if its going to get sorted correctly by query.
       // The correct position will be written by _populateFromServer when the object
-      // is returned from the server.
+      // is returned from the server.  We increment the position by the time since the prior lastMessage was sent
+      // so that if multiple tabs are sending messages and writing them to indexedDB, they will have positions in correct chronological order.
       // WARNING: The query will NOT be resorted using the server's position value.
-      message.position = this.lastMessage ? this.lastMessage.position + 1 : 0;
+      let position;
+      if (this.lastMessage) {
+        position = this.lastMessage.position + Date.now() - this.lastMessage.sentAt.getTime();
+        if (position === this.lastMessage.position) position++;
+      } else {
+        position = 0;
+      }
+      message.position = position;
       this.lastMessage = message;
     }
 
@@ -273,7 +281,8 @@ class Conversation extends Syncable {
         participants: this.participants,
         distinct: this.distinct,
         metadata: isMetadataEmpty ? null : this.metadata,
-      }
+        id: this.id,
+      },
     };
   }
 
@@ -284,7 +293,7 @@ class Conversation extends Syncable {
    * events reporting changes to the layer.Conversation.id can
    * be applied before reporting on it being sent.
    *
-   * Example: Query will now have IDs rather than TEMP_IDs
+   * Example: Query will now have the resolved Distinct IDs rather than the proposed ID
    * when this event is triggered.
    *
    * @method _createResult
@@ -351,8 +360,9 @@ class Conversation extends Syncable {
 
     const id = this.id;
     this.id = conversation.id;
+
+    // IDs change if the server returns a matching Distinct Conversation
     if (id !== this.id) {
-      this._tempId = id;
       client._updateConversationId(this, id);
       this._triggerAsync('conversations:change', {
         oldValue: id,
@@ -895,7 +905,7 @@ class Conversation extends Syncable {
     if (!result.success) {
       this.syncState = Constants.SYNC_STATE.NEW;
       this.trigger('conversations:loaded-error', { error: result.data });
-      this.destroy();
+      if (!this.isDestroyed) this.destroy();
     } else {
       // If successful, copy the properties into this object
       this._populateFromServer(result.data);
@@ -1374,17 +1384,6 @@ Conversation.prototype._toObject = null;
  */
 Conversation.prototype._sendDistinctEvent = null;
 
-/**
- * A locally created Conversation will get a temporary ID.
- *
- * Some may try to lookup the Conversation using the temporary ID even
- * though it may have later received an ID from the server.
- * Keep the temporary ID so we can correctly index and cleanup.
- *
- * @type {String}
- * @private
- */
-Conversation.prototype._tempId = '';
 
 Conversation.prototype._fromDB = false;
 

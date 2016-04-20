@@ -14,7 +14,7 @@ EventClass.prototype = Events;
 
 const SystemBus = new EventClass();
 if (typeof postMessage === 'function') {
-  addEventListener('message', function (event) {
+  addEventListener('message', (event) => {
     if (event.data.type === 'layer-delayed-event') {
       SystemBus.trigger(event.data.internalId + '-delayed-event');
     }
@@ -150,7 +150,7 @@ class Root extends EventClass {
 
     // Generate a temporary id if there isn't an id
     if (!this.id && !options.id && this.constructor.prefixUUID) {
-      this.id = 'temp_' + this.constructor.prefixUUID + Utils.generateUUID();
+      this.id = this.constructor.prefixUUID + Utils.generateUUID();
     }
 
     // Copy in all properties; setup all event handlers
@@ -163,22 +163,6 @@ class Root extends EventClass {
       }
     }
     this.isInitializing = false;
-  }
-
-
-  /**
-   * Takes as input an id, returns boolean reporting on whether its a valid id for this class.
-   *
-   * @method _validateId
-   * @protected
-   * @return {boolean}
-   */
-  _validateId() {
-    const id = String(this.id);
-    const prefix = this.constructor.prefixUUID;
-    if (id.indexOf(prefix) !== 0 && id.indexOf('temp_' + prefix) !== 0) return false;
-    if (!id.substring(prefix.length).match(/.{8}-.{4}-.{4}-.{4}-.{12}$/)) return false;
-    return true;
   }
 
   /**

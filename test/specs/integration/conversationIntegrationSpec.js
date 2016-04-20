@@ -9,7 +9,8 @@ describe("Conversation Integration Tests", function() {
         requests = jasmine.Ajax.requests;
         client = new layer.Client({
             appId: appId,
-            url: "https://huh.com"
+            url: "https://huh.com",
+            isTrustedDevice: false
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
@@ -39,6 +40,7 @@ describe("Conversation Integration Tests", function() {
             callback: function() {}
         });
         syncManager.queue = [request];
+        client._clientReady();
     });
 
     afterAll(function() {

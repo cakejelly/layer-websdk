@@ -180,7 +180,7 @@ const Logger = require('./logger');
 const CONVERSATION = 'Conversation';
 const MESSAGE = 'Message';
 const findConvIdRegex = new RegExp(
-  /^conversation.id\s*=\s*['"]((temp_)?layer:\/\/\/conversations\/.{8}-.{4}-.{4}-.{4}-.{12})['"]$/);
+  /^conversation.id\s*=\s*['"](layer:\/\/\/conversations\/.{8}-.{4}-.{4}-.{4}-.{12})['"]$/);
 
 class Query extends Root {
 
@@ -254,7 +254,8 @@ class Query extends Root {
     if ('paginationWindow' in optionsBuilt && this.paginationWindow !== optionsBuilt.paginationWindow) {
       this.paginationWindow = Math.min(Query.MaxPageSize + this.size, optionsBuilt.paginationWindow);
       if (this.paginationWindow < optionsBuilt.paginationWindow) {
-        Logger.warn(`paginationWindow value ${optionsBuilt.paginationWindow} in Query.update() increases size greater than Query.MaxPageSize of ${Query.MaxPageSize}`);
+        Logger.warn(`paginationWindow value ${optionsBuilt.paginationWindow} in Query.update() ` +
+          `increases size greater than Query.MaxPageSize of ${Query.MaxPageSize}`);
       }
       needsRefresh = true;
     }
@@ -399,7 +400,7 @@ class Query extends Root {
 
       // We will already have a this._predicate if we are paging; else we need to extract the UUID from
       // the conversationId.
-      const uuid = (this._predicate || conversationId).replace(/^(temp_)?layer\:\/\/\/conversations\//, '');
+      const uuid = (this._predicate || conversationId).replace(/^layer\:\/\/\/conversations\//, '');
       if (uuid) {
         return {
           uuid,
@@ -451,8 +452,8 @@ class Query extends Root {
       // if (conversation && conversation.lastMessage && lastMessage && lastMessage.id === conversation.lastMessage.id) fromId = '';
       const newRequest = `conversations/${predicateIds.uuid}/messages?page_size=${pageSize}${fromId}`;
 
-      // Don't query on temporary ids, nor repeat still firing queries
-      if (!this._predicate.match(/temp_/) && newRequest !== this._firingRequest) {
+      // Don't query on unsaved conversations, nor repeat still firing queries
+      if ((!conversation || conversation.isSaved()) && newRequest !== this._firingRequest) {
         this.isFiring = true;
         this._firingRequest = newRequest;
         this.client.xhr({
@@ -669,7 +670,7 @@ class Query extends Root {
   _handleConversationChangeEvent(evt) {
     let index = this._getIndex(evt.target.id);
 
-    // If its an ID change (from temp to non-temp id) make sure to update our data.
+    // If its an ID change (matching Distinct Conversation returned by server) make sure to update our data.
     // If dataType is an instance, its been updated for us.
     if (this.dataType === Query.ObjectDataType) {
       const idChanges = evt.getChangesFor('id');
@@ -697,11 +698,9 @@ class Query extends Root {
           ];
         } else {
           const newIndex = this._getInsertConversationIndex(evt.target, this.data);
-          if (newIndex !== index) {
-            this.data.splice(index, 1);
-            this.data.splice(newIndex, 0, this._getData(evt.target));
-            this.data = this.data.concat([]);
-          }
+          this.data.splice(index, 1);
+          this.data.splice(newIndex, 0, this._getData(evt.target));
+          this.data = this.data.concat([]);
         }
       }
 
@@ -845,6 +844,15 @@ class Query extends Root {
     }
   }
 
+  /**
+   * A Conversation ID changes if a matching Distinct Conversation was found on the server.
+   *
+   * If this Query's Conversation's ID has changed, update the predicate.
+   *
+   * @method _handleMessageConvIdChangeEvent
+   * @param {layer.LayerEvent} evt - A Message Change Event
+   * @private
+   */
   _handleMessageConvIdChangeEvent(evt) {
     const cidChanges = evt.getChangesFor('id');
     if (cidChanges.length) {
@@ -899,11 +907,15 @@ class Query extends Root {
 
   _handleMessageChangeEvent(evt) {
     let index = this._getIndex(evt.target.id);
-    const midChanges = evt.getChangesFor('id');
+    const positionChanges = evt.getChangesFor('position');
 
-    if (midChanges.length) {
-      index = this._getIndex(midChanges[0].oldValue);
-      if (this._handleMessagePositionChange(evt, index)) return;
+    // If there are position changes, handle them.  If all the changes are position changes,
+    // exit when done.
+    if (positionChanges.length) {
+      if (this._handleMessagePositionChange(evt, index)) {
+        if (positionChanges.length === evt.changes.length) return;
+        index = this._getIndex(evt.target.id); // Get the updated position
+      }
     }
 
     if (evt.target.conversationId === this._predicate && index !== -1) {

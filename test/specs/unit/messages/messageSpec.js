@@ -1071,7 +1071,8 @@ describe("The Message class", function() {
             spyOn(m, "_preparePartsForSending");
             m.send();
             expect(m._preparePartsForSending).toHaveBeenCalledWith({
-                parts: new Array(1)
+                parts: new Array(1),
+                id: m.id
             });
         });
 
@@ -1083,6 +1084,7 @@ describe("The Message class", function() {
             });
             expect(m._preparePartsForSending).toHaveBeenCalledWith({
                 parts: new Array(1),
+                id: m.id,
                 notification: {
                     sound: "doh.aiff",
                     text: "Doh!"
@@ -1132,7 +1134,10 @@ describe("The Message class", function() {
             spyOn(m.parts[1], "_send");
 
             // Run
-            m._preparePartsForSending({parts: [null, null]});
+            m._preparePartsForSending({
+              parts: [null, null],
+              id: "fred"
+            });
 
             // Posttest
             expect(m.parts[0]._send).toHaveBeenCalledWith(client);
@@ -1146,7 +1151,10 @@ describe("The Message class", function() {
             spyOn(m.parts[1], "_send");
 
             // Run
-            m._preparePartsForSending({parts: [null, null]});
+            m._preparePartsForSending({
+              parts: [null, null],
+              id: m.id
+            });
             m.parts[0].trigger("parts:send", {
                 mime_type: "actor/mime",
                 body: "I am a Mime"
@@ -1158,6 +1166,7 @@ describe("The Message class", function() {
 
             // Posttest
             expect(m._send).toHaveBeenCalledWith({
+                id: m.id,
                 parts: [{
                     mime_type: "actor/mime",
                     body: "I am a Mime"
@@ -1675,17 +1684,18 @@ describe("The Message class", function() {
             expect(m._setSynced).toHaveBeenCalled();
         });
 
-        it("Should trigger an ID change", function() {
+        it("Should trigger a position change", function() {
             // Setup
             m = new layer.Message({
                 client: client
             });
             spyOn(m, "_triggerAsync");
-            var id = m.id;
+            var position = m.position = 5;
 
             // Run
             m._populateFromServer({
                 id: "dohId",
+                position: 35,
                 sender: {
                     user_id: "999"
                 },
@@ -1694,52 +1704,10 @@ describe("The Message class", function() {
 
             // Posttest
             expect(m._triggerAsync).toHaveBeenCalledWith("messages:change", {
-                oldValue: id,
-                newValue: "dohId",
-                property: 'id'
+                oldValue: position,
+                newValue: 35,
+                property: 'position'
             });
-        });
-
-        it("Should call _updateMessageId", function() {
-            // Setup
-            m = new layer.Message({
-                client: client
-            });
-            spyOn(client, "_updateMessageId");
-            var id = m.id;
-
-            // Run
-            m._populateFromServer({
-                id: "dohId",
-                sender: {
-                    user_id: "999"
-                },
-                parts: [{mime_type: "text/plain", body: "Doh!"}]
-            });
-
-            // Posttest
-            expect(client._updateMessageId).toHaveBeenCalledWith(m, id);
-        });
-
-        it("Should cache the tempId", function() {
-            // Setup
-            m = new layer.Message({
-                client: client
-            });
-            var id = m.id;
-
-            // Run
-            m._populateFromServer({
-                id: "dohId",
-                sender: {
-                    user_id: "999"
-                },
-                parts: [{mime_type: "text/plain", body: "Doh!"}]
-            });
-
-            // Posttest
-            expect(m._tempId).toEqual(id);
-            expect(m._tempId).not.toEqual(m.id);
         });
     });
 

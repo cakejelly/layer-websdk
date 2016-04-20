@@ -21,6 +21,7 @@
     "filereader": "^0.10.3",
     "get-random-values": "^1.2.0",
     "layer-patch": "^1.0.0",
+    "uuid": "^2.0.1",
     "websocket": "^1.0.22",
     "xhr2": "^0.1.2"
   },

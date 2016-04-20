@@ -8,11 +8,10 @@ describe("The DbManager Class", function() {
         dbManager;
 
     beforeEach(function(done) {
-              console.log("START: " + Date.now());
-
         client = new layer.Client({
             appId: appId,
-            url: "https://huh.com"
+            url: "https://huh.com",
+            isTrustedDevice: true
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
@@ -22,8 +21,6 @@ describe("The DbManager Class", function() {
         message = conversation.lastMessage;
         dbManager = client.dbManager;
         dbManager.deleteTables(function() {
-                  console.log("END: " + Date.now());
-
           done();
         });
     });
@@ -86,24 +83,27 @@ describe("The DbManager Class", function() {
         expect(dbManager.writeSyncEvents).toHaveBeenCalledWith([syncEvent], false);
       });
 
-      it("Should listen for sync:success events", function() {
+      it("Should listen for sync:abort events", function() {
         var syncEvent = new layer.XHRSyncEvent({});
         spyOn(dbManager, "deleteObjects");
-        client.syncManager.trigger('sync:success', { request: syncEvent });
-        expect(dbManager.deleteObjects).toHaveBeenCalledWith('sync-queue', [syncEvent]);
+        client.syncManager.trigger('sync:abort', { request: syncEvent });
+        expect(dbManager.deleteObjects).toHaveBeenCalledWith('syncQueue', [syncEvent]);
       });
 
       it("Should listen for sync:error events", function() {
         var syncEvent = new layer.XHRSyncEvent({});
         spyOn(dbManager, "deleteObjects");
         client.syncManager.trigger('sync:error', { request: syncEvent });
-        expect(dbManager.deleteObjects).toHaveBeenCalledWith('sync-queue', [syncEvent]);
+        expect(dbManager.deleteObjects).toHaveBeenCalledWith('syncQueue', [syncEvent]);
       });
 
       it("Should call _open", function() {
         var _open = layer.DbManager.prototype._open;
         spyOn(layer.DbManager.prototype, "_open");
-        var dbManager = new layer.DbManager({ client: client });
+        var dbManager = new layer.DbManager({
+          client: client,
+          tables: {conversations: true}
+         });
 
         // Posttest
         expect(layer.DbManager.prototype._open).toHaveBeenCalledWith();
@@ -111,11 +111,64 @@ describe("The DbManager Class", function() {
         // Cleanup
         layer.DbManager.prototype._open = _open;
       });
+
+      it("Should accept a tables property", function() {
+        var dbManager = new layer.DbManager({
+          client: client,
+          tables: {
+            conversations: true,
+            messages: true,
+            identities: false,
+            syncQueue: true
+          }
+        });
+        expect(dbManager.tables).toEqual({
+          conversations: true,
+          messages: true,
+          identities: false,
+          syncQueue: true
+        });
+      });
+
+      it("Should set syncQueue to false if either conversations or messages are false", function() {
+        var dbManager = new layer.DbManager({
+          client: client,
+          tables: {
+            conversations: true,
+            messages: false,
+            identities: false,
+            syncQueue: true
+          }
+        });
+        expect(dbManager.tables).toEqual({
+          conversations: true,
+          messages: false,
+          identities: false,
+          syncQueue: false
+        });
+
+      });
     });
 
     describe("The _open() method", function() {
+      it("Should callback immediately if no tables enabled", function() {
+        dbManager.tables = {
+          conversations: false,
+          messages: false,
+          identities: false,
+          syncQueue: false
+        };
+        var done = false;
+        dbManager.onOpen(function() {
+          done = true;
+        });
+        expect(done).toBe(true);
+      });
       it("Should trigger open event", function(done) {
-        var dbManager = new layer.DbManager({ client: client });
+        var dbManager = new layer.DbManager({
+          client: client,
+          tables: {conversations: true}
+         });
         dbManager.on('open', function() {
           expect(dbManager.isOpen).toBe(true);
           expect(dbManager.db).not.toEqual(null);
@@ -130,8 +183,11 @@ describe("The DbManager Class", function() {
 
     describe("The onOpen() method", function() {
       it("Should callback when open", function(done) {
-        var dbManager = new layer.DbManager({ client: client });
-        dbManager.onOpen(function() {
+        var dbManager = new layer.DbManager({
+          client: client,
+          tables: {conversations: true}
+         });
+         dbManager.onOpen(function() {
           expect(dbManager.isOpen).toBe(true);
           done();
         });
@@ -139,7 +195,10 @@ describe("The DbManager Class", function() {
 
       it("Should callback immediately if open", function() {
         var spy = jasmine.createSpy('opOpen');
-        var dbManager = new layer.DbManager({ client: client });
+        var dbManager = new layer.DbManager({
+          client: client,
+          tables: {conversations: true}
+         });
         dbManager.isOpen = true;
         dbManager.onOpen(spy);
         expect(spy).toHaveBeenCalledWith();
@@ -312,7 +371,6 @@ describe("The DbManager Class", function() {
       it("Should generate a proper object", function() {
         expect(dbManager._getSyncEventData([syncEvent])).toEqual([{
           id: syncEvent.id,
-          clientId: client.id,
           url: syncEvent.url,
           target: syncEvent.target,
           depends: syncEvent.depends,
@@ -338,7 +396,6 @@ describe("The DbManager Class", function() {
         });
         expect(dbManager._getSyncEventData([syncEvent])).toEqual([{
           id: syncEvent.id,
-          clientId: client.id,
           url: '',
           target: syncEvent.target,
           depends: syncEvent.depends,
@@ -373,21 +430,21 @@ describe("The DbManager Class", function() {
         spyOn(dbManager, "_writeObjects");
         spyOn(dbManager, "_getSyncEventData").and.returnValue([{id: 'fred'}]);
         dbManager.writeSyncEvents([syncEvent], false);
-        expect(dbManager._writeObjects).toHaveBeenCalledWith('sync-queue', jasmine.any(Object), false, undefined);
+        expect(dbManager._writeObjects).toHaveBeenCalledWith('syncQueue', jasmine.any(Object), false, undefined);
       });
 
       it("Should forward isUpdate true to writeSyncEvents", function() {
         spyOn(dbManager, "_writeObjects");
         spyOn(dbManager, "_getSyncEventData").and.returnValue([{id: 'fred'}]);
         dbManager.writeSyncEvents([syncEvent], true);
-        expect(dbManager._writeObjects).toHaveBeenCalledWith('sync-queue', jasmine.any(Object), true, undefined);
+        expect(dbManager._writeObjects).toHaveBeenCalledWith('syncQueue', jasmine.any(Object), true, undefined);
       });
 
       it("Should feed data from _getSyncEventData to _writeObjects", function() {
         spyOn(dbManager, "_writeObjects");
         spyOn(dbManager, "_getSyncEventData").and.returnValue([{id: 'fred'}]);
         dbManager.writeSyncEvents([syncEvent], false);
-        expect(dbManager._writeObjects).toHaveBeenCalledWith('sync-queue', [{id: 'fred'}], jasmine.any(Boolean), undefined);
+        expect(dbManager._writeObjects).toHaveBeenCalledWith('syncQueue', [{id: 'fred'}], jasmine.any(Boolean), undefined);
       });
     });
 
@@ -581,7 +638,7 @@ describe("The DbManager Class", function() {
         dbManager._loadConversationsResult(dbManager._getConversationData([c1, c2]), [], callback);
 
         // Posttest
-        expect(callback).toHaveBeenCalledWith([client.getConversation(c1.id)]);
+        expect(callback).toHaveBeenCalledWith([jasmine.objectContaining({id: c1.id}), jasmine.objectContaining({id: c2.id})]);
       });
     });
 
@@ -628,7 +685,7 @@ describe("The DbManager Class", function() {
         dbManager._loadMessagesResult(dbManager._getMessageData([m1, m2]), spy);
 
         // Posttest
-        expect(spy).toHaveBeenCalledWith([client.getMessage(m1.id)]);
+        expect(spy).toHaveBeenCalledWith([jasmine.objectContaining({id: m1.id}), jasmine.objectContaining({id: m2.id})]);
       });
     });
 
@@ -679,10 +736,10 @@ describe("The DbManager Class", function() {
     });
 
     describe("The loadSyncQueue() method", function() {
-      it("Should call _loadByIndex", function() {
-        spyOn(dbManager, "_loadByIndex");
+      it("Should call _loadAll", function() {
+        spyOn(dbManager, "_loadAll");
         dbManager.loadSyncQueue();
-        expect(dbManager._loadByIndex).toHaveBeenCalledWith('sync-queue', 'clientId', client.id, jasmine.any(Function));
+        expect(dbManager._loadAll).toHaveBeenCalledWith('syncQueue', jasmine.any(Function));
       });
 
       it("Should call _loadSyncEventRelatedData with results", function() {
@@ -690,7 +747,7 @@ describe("The DbManager Class", function() {
         var spy = jasmine.createSpy('callback');
         var syncEvent = new layer.XHRSyncEvent({});
         var syncEventRaw = dbManager._getSyncEventData([syncEvent])[0];
-        spyOn(dbManager, "_loadByIndex").and.callFake(function(tableName, index, id, callback) {
+        spyOn(dbManager, "_loadAll").and.callFake(function(tableName, callback) {
           callback([syncEventRaw]);
         });
 
@@ -864,8 +921,8 @@ describe("The DbManager Class", function() {
         });
       });
 
-      it("Should load nothing if disabled", function(done) {
-        dbManager.isDisabled = true;
+      it("Should load nothing if table is", function(done) {
+        dbManager.tables.messages = false;
         dbManager._loadAll('messages', function(result) {
           expect(result).toEqual([]);
           done();
@@ -894,7 +951,7 @@ describe("The DbManager Class", function() {
       });
 
       it("Should get nothing if disabled", function(done) {
-        dbManager.isDisabled = true;
+        dbManager.tables.messages = false;
         dbManager._loadByIndex('messages', 'conversation', conversation.id, function(result) {
           expect(result).toEqual([]);
           done();
@@ -958,7 +1015,8 @@ describe("The DbManager Class", function() {
           dbManager._writeObjects('conversations', dbManager._getConversationData([c1, c2]), false, function() {
             var s1 = new layer.XHRSyncEvent({});
             var s2 = new layer.XHRSyncEvent({});
-            dbManager._writeObjects('sync-queue', dbManager._getSyncEventData([s1, s2]), false, done);
+            dbManager._writeObjects('syncQueue', dbManager._getSyncEventData([s1, s2]), false, done);
+            client.syncManager.queue = [];
           });
         });
       });
@@ -968,13 +1026,46 @@ describe("The DbManager Class", function() {
             expect(cResult).toEqual([]);
             dbManager._loadAll('messages', function(mResult) {
               expect(mResult).toEqual([]);
-              dbManager._loadAll('sync-queue', function(sResult) {
+              dbManager._loadAll('syncQueue', function(sResult) {
                 expect(sResult).toEqual([]);
                 done();
               });
             });
           });
         });
+      });
+    });
+
+    describe("The claimSyncEvent() method", function() {
+      var syncEvent;
+      beforeEach(function(done) {
+        syncEvent = new layer.XHRSyncEvent({
+          target: "fred",
+          depends: ["joe", "fred"],
+          operation: "brain removal",
+          data: {
+            zombieCount: "cant count without brains"
+          },
+          url: "sue",
+          headers: {'content-type': 'mountain/text'},
+          method: 'POST',
+          createdAt: new Date("2010-10-10")
+        });
+        dbManager.writeSyncEvents([syncEvent], false, done);
+      });
+
+      it("Should only allow a single request to work", function(done) {
+        var callbackCount = 0, successCount = 0;
+        for (var i = 0; i < 2; i++) {
+          dbManager.claimSyncEvent(syncEvent, function(result) {
+            callbackCount++;
+            if (result) successCount++;
+            if (callbackCount == 2) {
+              expect(successCount).toEqual(1);
+              done();
+            }
+          });
+        }
       });
     });
 });

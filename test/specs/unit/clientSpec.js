@@ -246,11 +246,6 @@ describe("The Client class", function() {
             }).toThrowError(layer.LayerError.dictionary.idParamRequired);
             expect(layer.LayerError.dictionary.idParamRequired.length > 0).toBe(true);
         });
-
-        it("Should work with a tempId", function() {
-          client._tempConversationsHash["temp"] = conversation.id;
-          expect(client.getConversation("temp")).toBe(conversation);
-        });
     });
 
     describe("The _addConversation() method", function() {
@@ -331,20 +326,6 @@ describe("The Client class", function() {
             // Posttest
             delete hash[c1.id];
             expect(client._conversationsHash).toEqual(hash);
-        });
-
-        it("Should delete from _tempConversationsHash", function() {
-            // Setup
-            var c1 = client.createConversation(["a"]);
-            c1._tempId = "temp";
-            client._tempConversationsHash[c1._tempId] = c1.id;
-
-
-            // Run
-            client._removeConversation(c1);
-
-            // Posttest
-            expect(client._tempConversationsHash["temp"]).toBe(undefined);
         });
 
         it("Should trigger event on removing conversation", function() {
@@ -433,20 +414,6 @@ describe("The Client class", function() {
             expect(client._conversationsHash[c1id]).toBe(undefined);
         });
 
-        it("Should enter it into _tempConversationsHash", function() {
-            // Setup
-            var c1 = new layer.Conversation({});
-            client._addConversation(c1);
-            var c1id = c1.id;
-
-            // Run
-            c1.id = "fred";
-            client._updateConversationId(c1, c1id);
-
-            // Posttest
-            expect(client._tempConversationsHash[c1id]).toEqual("fred");
-        });
-
         it("Should update all Message conversationIds", function() {
             // Setup
             var c1 = new layer.Conversation({participants: ["a"]});
@@ -504,7 +471,7 @@ describe("The Client class", function() {
         });
 
         it("Should load by id", function() {
-            var newId = message.id.replace(/temp_/,"") + "a";
+            var newId = message.id + "a";
             var m1 = client.getMessage(newId, true);
 
             // Posttest
@@ -518,11 +485,6 @@ describe("The Client class", function() {
                 client.getMessage(5);
             }).toThrowError(layer.LayerError.dictionary.idParamRequired);
             expect(layer.LayerError.dictionary.idParamRequired.length > 0).toBe(true);
-        });
-
-        it("Should work with a tempId", function() {
-          client._tempMessagesHash["temp"] = message.id;
-          expect(client.getMessage("temp")).toBe(message);
         });
     });
 
@@ -651,68 +613,6 @@ describe("The Client class", function() {
             // Posttest
             expect(client.trigger).not.toHaveBeenCalled();
         });
-
-        it("Should delete from _tempMessagesHash", function() {
-            // Setup
-            message._tempId = "temp";
-            client._tempMessagesHash[message._tempId] = message.id;
-
-            // Run
-            client._removeMessage(message);
-
-            // Posttest
-            expect(client._tempMessagesHash["temp"]).toBe(undefined);
-        });
-    });
-
-    describe("The _updateMessageId() method", function() {
-        var conversation;
-        var message;
-        beforeEach(function() {
-            conversation = client.createConversation(["a"]);
-            message = conversation.createMessage("hello").send();
-        });
-
-        it("Should register the Message under the new id", function() {
-            // Setup
-            var id = message.id;
-
-            // Run
-            message.id = "fred";
-            client._updateMessageId(message, id);
-
-            // Posttest
-            expect(client.getMessage("fred")).toBe(message);
-        });
-
-        it("Should deregister the old id", function() {
-            // Setup
-            var id = message.id;
-
-            // Pretest
-            expect(client._messagesHash[id]).toBe(message);
-
-            // Run
-            message.id = "fred";
-            client._updateMessageId(message, id);
-
-            // Posttest
-            expect(client._messagesHash[id]).toBe(undefined);
-        });
-
-
-        it("Should enter it into _tempMessagesHash", function() {
-            // Setup
-            var mId = message.id;
-
-            // Run
-            message.id = "fred";
-            client._updateMessageId(message, mId);
-
-            // Posttest
-            expect(client._tempMessagesHash[mId]).toEqual("fred");
-        });
-
     });
 
     describe("The _getObject() method", function() {
@@ -1278,7 +1178,6 @@ describe("The Client class", function() {
             expect(m2.isDestroyed).toBe(true);
             expect(m3.isDestroyed).toBe(false);
         });
-
     });
 
     describe("The _removeQuery() method", function() {

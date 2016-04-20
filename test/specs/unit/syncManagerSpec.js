@@ -193,6 +193,7 @@ describe("The SyncManager Class", function() {
     describe("The request() method", function() {
         var evt;
         beforeEach(function() {
+            client._clientReady();
             evt = new layer.XHRSyncEvent({
                 operation: "PATCH",
                 target: "fred"
@@ -272,6 +273,9 @@ describe("The SyncManager Class", function() {
 
 
     describe("The _processNextRequest() method", function() {
+        beforeEach(function() {
+          client._clientReady();
+        });
         it("Should call bsocketManager.sendRequest", function() {
             var data = {name: "fred"}
             syncManager.queue = [new layer.WebsocketSyncEvent({
@@ -346,12 +350,112 @@ describe("The SyncManager Class", function() {
             expect(syncManager._xhrError).not.toHaveBeenCalled();
         });
 
+        it("Should call _xhrSuccess if _handleDeduplicationErrors changes success to true", function() {
+            var result = {success: false};
+            spyOn(syncManager, "_handleDeduplicationErrors").and.callFake(function(result) {
+              result.success = true;
+            });
+
+            syncManager._xhrResult(result, syncManager.queue[0]);
+            expect(syncManager._xhrSuccess).toHaveBeenCalledWith(result);
+            expect(syncManager._xhrError).not.toHaveBeenCalled();
+        });
+
         it("Should call _xhrError", function() {
             var result = {success: false};
             syncManager._xhrResult(result, syncManager.queue[0]);
             expect(syncManager._xhrSuccess).not.toHaveBeenCalled();
             expect(syncManager._xhrError).toHaveBeenCalledWith(result);
         });
+    });
+
+    describe("The _handleDeduplicationErrors() method", function() {
+      beforeEach(function() {
+          syncManager.queue = [new layer.WebsocketSyncEvent({
+              data: {
+                method: 'Message.create',
+                data: {
+                  id: 'myobjid'
+                }
+              },
+              url: "fred2",
+              operation: "POST"
+          })];
+          spyOn(syncManager, "_xhrError");
+          spyOn(syncManager, "_xhrSuccess");
+      });
+
+      it("Should ignore errors that are not id_in_use", function() {
+        var result = {
+          success: false,
+          data: {
+            id: 'fred',
+            data: {
+              id: 'myobjid'
+            }
+          },
+          request: syncManager.queue[0]
+        };
+        syncManager._handleDeduplicationErrors(result);
+        expect(result.success).toBe(false);
+      });
+
+      it("Should ignore errors that are id_in_use but lack an Object", function() {
+        var result = {
+          success: false,
+          data: {
+            id: 'id_in_use'
+          },
+          request: syncManager.queue[0]
+        };
+        syncManager._handleDeduplicationErrors(result);
+        expect(result.success).toBe(false);
+      });
+
+      it("Should ignore errors that are id_in_use but lack an Object with matching ID", function() {
+        var result = {
+          success: false,
+          data: {
+            id: 'id_in_use',
+            data: {
+              id: 'myobjid2'
+            }
+          },
+          request: syncManager.queue[0]
+        };
+        syncManager._handleDeduplicationErrors(result);
+        expect(result.success).toBe(false);
+      });
+
+      it("Should handle errors marking them as Success", function() {
+        var result = {
+          success: false,
+          data: {
+            id: 'id_in_use',
+            data: {
+              id: 'myobjid'
+            }
+          },
+          request: syncManager.queue[0]
+        };
+        syncManager._handleDeduplicationErrors(result);
+        expect(result.success).toBe(true);
+      });
+
+      it("Should handle errors changing data to the Object", function() {
+        var result = {
+          success: false,
+          data: {
+            id: 'id_in_use',
+            data: {
+              id: 'myobjid'
+            }
+          },
+          request: syncManager.queue[0]
+        };
+        syncManager._handleDeduplicationErrors(result);
+        expect(result.data).toEqual({id: 'myobjid'});
+      });
     });
 
     describe("The _xhrSuccess() method", function() {
@@ -429,12 +533,17 @@ describe("The SyncManager Class", function() {
         });
 
         it("Should return notFound if server returns not_found", function() {
-            expect(syncManager._getErrorState({status: 404, data: {code: 102}}, {retryCount: layer.SyncManager.MAX_RETRIES }, true)).toEqual("notFound");
+            expect(syncManager._getErrorState({status: 404, data: {id: 'not_found'}}, {retryCount: layer.SyncManager.MAX_RETRIES }, true)).toEqual("notFound");
+        });
+
+         it("Should return invalidId if server returns id_in_use", function() {
+            expect(syncManager._getErrorState({status: 404, data: {id: 'id_in_use'}}, {retryCount: layer.SyncManager.MAX_RETRIES }, true)).toEqual("invalidId");
         });
 
         it("Should return reauthorize if there is a nonce", function() {
-            expect(syncManager._getErrorState({status: 401, data: {data: {nonce: "fred"}}}, {retryCount: 0}, true)).toEqual("reauthorize");
-            expect(syncManager._getErrorState({status: 402, data: {data: {nonce: "fred"}}}, {retryCount: 0}, true)).not.toEqual("reauthorize");
+            expect(syncManager._getErrorState({status: 401, data: {id: 'authentication_required', data: {nonce: "fred"}}}, {retryCount: 0}, true)).toEqual("reauthorize");
+            expect(syncManager._getErrorState({status: 402, data: {id: 'authentication_required', data: {nonce: "fred"}}}, {retryCount: 0}, true)).toEqual("reauthorize");
+            expect(syncManager._getErrorState({status: 401, data: {id: 'authentication_required2', data: {nonce: "fred"}}}, {retryCount: 0}, true)).not.toEqual("reauthorize");
         });
 
         it("Should return serverRejectedRequest for anything else", function() {
@@ -447,6 +556,7 @@ describe("The SyncManager Class", function() {
         var request;
         beforeEach(function() {
             syncManager.onlineManager.isOnline = true;
+            client._clientReady();
             request = new layer.SyncEvent({
                 operation: "PATCH",
                 target: "fred"
@@ -492,6 +602,18 @@ describe("The SyncManager Class", function() {
         it("Should call _xhrHandleServerError if CORS error", function() {
             spyOn(syncManager, "_xhrHandleServerError");
             spyOn(syncManager, "_getErrorState").and.returnValue("CORS");
+            var result = {request: request};
+
+            // Run
+            syncManager._xhrError(result);
+
+            // Posttest
+            expect(syncManager._xhrHandleServerError).toHaveBeenCalledWith(result, jasmine.any(String));
+        });
+
+        it("Should call _xhrHandleServerError if invalidId error", function() {
+            spyOn(syncManager, "_xhrHandleServerError");
+            spyOn(syncManager, "_getErrorState").and.returnValue("invalidId");
             var result = {request: request};
 
             // Run
@@ -624,6 +746,7 @@ describe("The SyncManager Class", function() {
         var request, result;
         beforeEach(function() {
             syncManager.onlineManager.isOnline = true;
+            client._clientReady();
             request = new layer.XHRSyncEvent({
                 operation: "PATCH",
                 target: "fred",
@@ -724,6 +847,7 @@ describe("The SyncManager Class", function() {
         var request;
         beforeEach(function() {
             syncManager.onlineManager.isOnline = true;
+            client._clientReady();
             request = new layer.XHRSyncEvent({
                 operation: "PATCH",
                 target: "fred"

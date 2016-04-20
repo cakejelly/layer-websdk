@@ -1,13 +1,11 @@
 /**
  * Persistence manager
- *
- * TODO: Investigate first tab processes ALL sync requests; needs to NOT load sync events from tab thats already loaded; in fact, already loaded tab could snag all sync events from table.; Can a very simple service-worker be used to manage open tabs and which one gets which sync events?
- * TODO: If I have 5 tabs open, send a bunch of stuff offline, and then never again open 5, someone should still find those events and send them.
- * TODO: If I read sync_state=NEW items, ignore them unless from our `clientId`
+ * TODO: Conversation has to track last synced position, and use that to calculate each new position
+ * TODO: Documentation
  * @class layer.db-manager
  */
 
-const DB_VERSION = 2;
+const DB_VERSION = 13;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -34,16 +32,33 @@ class DbManager extends Root {
       this.client.on('messages:delete', evt => this.deleteObjects('messages', [evt.target]));
     }
 
-    this.client.syncManager.on('sync:add sync:abort sync:error', evt => this.writeSyncEvents([evt.request], false));
+    this.client.syncManager.on('sync:add', evt => this.writeSyncEvents([evt.request], false));
+    this.client.syncManager.on('sync:abort sync:error', evt => this.deleteObjects('syncQueue', [evt.request]));
 
-    if (!window.indexedDB) this.isDisabled = true;
+    if (!window.indexedDB) {
+      this.tables = {
+        identities: true,
+        conversations: true,
+        messages: true,
+        syncQueue: true,
+      };
+    }
+    if (!this.tables.conversations || !this.tables.messages) {
+      this.tables.syncQueue = false;
+    }
     this._open();
   }
 
 
   _open() {
-    if (this.isDisabled) return;
+    // Abort if all tables are disabled
+    if (Object.keys(this.tables).filter(key => this.tables[key]).length === 0) return;
+
+    // Open the database
     const request = window.indexedDB.open('LayerWebSDK_' + this.client.appId + '_' + this.client.userId, DB_VERSION);
+    request.onerror = (evt) => {
+      console.error('Database Unable to Open: ', evt.target.error);
+    };
     request.onupgradeneeded = (evt) => this._onUpgradeNeeded(evt);
     request.onsuccess = (evt) => {
       this.db = evt.target.result;
@@ -62,7 +77,6 @@ class DbManager extends Root {
   }
 
   onOpen(callback) {
-    if (this.isDisabled) return;
     if (this.isOpen) callback();
     else this.once('open', callback);
   }
@@ -72,9 +86,21 @@ class DbManager extends Root {
     const db = event.target.result;
     try {
       db.deleteObjectStore('conversations');
+    } catch (e) {
+      // Noop
+    }
+    try {
       db.deleteObjectStore('identities');
+    } catch (e) {
+      // Noop
+    }
+    try {
       db.deleteObjectStore('messages');
-      db.deleteObjectStore('sync-queue');
+    } catch (e) {
+      // Noop
+    }
+    try {
+      db.deleteObjectStore('syncQueue');
     } catch (e) {
       // Noop
     }
@@ -82,11 +108,10 @@ class DbManager extends Root {
       db.createObjectStore('conversations', { keyPath: 'id' }),
       db.createObjectStore('messages', { keyPath: 'id' }),
       db.createObjectStore('identities', { keyPath: 'id' }),
-      db.createObjectStore('sync-queue', { keyPath: 'id' }),
+      db.createObjectStore('syncQueue', { keyPath: 'id' }),
     ];
 
     stores[1].createIndex('conversation', 'conversation', { unique: false });
-    stores[3].createIndex('client_id', 'client_id', { unique: false });
 
     let completeCount = 0;
     function onComplete() {
@@ -98,13 +123,6 @@ class DbManager extends Root {
     }
 
     stores.forEach(store => (store.transaction.oncomplete = onComplete));
-  }
-
-  _isRelevantEntry(entry) {
-    if ('sync_state' in entry) {
-      return entry.sync_state !== 'NEW' && entry.sync_state !== 'SAVING' || entry.client_id === this.client.id;
-    }
-    return true;
   }
 
   _getConversationData(conversations) {
@@ -128,14 +146,14 @@ class DbManager extends Root {
         unread_message_count: conversation.unreadCount,
         last_message: conversation.lastMessage ? conversation.lastMessage.id : '',
         sync_state: conversation.syncState,
-        client_id: !conversation.isSaved() ? this.client.id : '',
       };
       return item;
     });
   }
 
   writeConversations(conversations, isUpdate, callback) {
-    this._writeObjects('conversations', this._getConversationData(conversations), isUpdate, callback);
+    this._writeObjects('conversations',
+      this._getConversationData(conversations.filter(conversation => !conversation.isDestroyed)), isUpdate, callback);
   }
 
   _getMessageData(messages) {
@@ -177,14 +195,13 @@ class DbManager extends Root {
         received_at: getDate(message.receivedAt),
         conversation: message.conversationId,
         sync_state: message.syncState,
-        client_id: !message.isSaved() ? this.client.id : '',
       };
       return item;
     });
   }
 
   writeMessages(messages, isUpdate, callback) {
-    this._writeObjects('messages', this._getMessageData(messages), isUpdate, callback);
+    this._writeObjects('messages', this._getMessageData(messages.filter(message => !message.isDestroyed)), isUpdate, callback);
   }
 
   _getSyncEventData(syncEvents) {
@@ -198,7 +215,6 @@ class DbManager extends Root {
     }).map(syncEvent => {
       const item = {
         id: syncEvent.id,
-        client_id: this.client.id,
         target: syncEvent.target,
         depends: syncEvent.depends,
         isWebsocket: syncEvent instanceof SyncEvent.WebsocketSyncEvent,
@@ -214,10 +230,9 @@ class DbManager extends Root {
   }
 
   writeSyncEvents(syncEvents, isUpdate, callback) {
-    this._writeObjects('sync-queue', this._getSyncEventData(syncEvents), isUpdate, callback);
+    this._writeObjects('syncQueue', this._getSyncEventData(syncEvents), isUpdate, callback);
   }
 
-  // TODO: Count the number of transactions, and the number of transaction.oncomplete calls and only then call the callback
   _writeObjects(tableName, data, isUpdate, callback) {
     if (!data.length) {
       if (callback) callback();
@@ -255,7 +270,7 @@ class DbManager extends Root {
     this._loadAll('conversations', data => {
       const messagesToLoad = data
         .map(item => item.last_message)
-        .filter(messageId => !this.client.getMessage(messageId));
+        .filter(messageId => messageId && !this.client.getMessage(messageId));
       this.getObjects('messages', messagesToLoad, messages => {
         this._loadConversationsResult(data, messages, callback);
       });
@@ -264,8 +279,9 @@ class DbManager extends Root {
 
   _loadConversationsResult(conversations, messages, callback) {
     messages.forEach(message => this._createMessage(message));
+    conversations.forEach(conversation => this._createConversation(conversation));
     const newData = conversations
-      .map(conversation => this._createConversation(conversation))
+      .map(conversation => this.client.getConversation(conversation.id))
       .filter(conversation => conversation);
     if (callback) callback(newData);
   }
@@ -277,9 +293,11 @@ class DbManager extends Root {
   }
 
   _loadMessagesResult(messages, callback) {
+    messages.forEach(message => this._createMessage(message));
     const newData = messages
-      .map(message => this._createMessage(message))
+      .map(message => this.client.getMessage(message.id))
       .filter(message => message);
+    Util.sortBy(newData, item => item.position);
     if (callback) callback(newData);
   }
 
@@ -306,7 +324,7 @@ class DbManager extends Root {
   }
 
   loadSyncQueue(callback) {
-    this._loadByIndex('sync-queue', 'client_id', this.client.id, syncEvents => {
+    this._loadAll('syncQueue', syncEvents => {
       this._loadSyncEventRelatedData(syncEvents, callback);
     });
   }
@@ -364,7 +382,7 @@ class DbManager extends Root {
   }
 
   _loadAll(tableName, callback) {
-    if (this.isDisabled) return callback([]);
+    if (!this.tables[tableName]) return callback([]);
     this.onOpen(() => {
       const data = [];
       this.db.transaction([tableName], 'readonly').objectStore(tableName).openCursor().onsuccess = (evt) => {
@@ -373,14 +391,14 @@ class DbManager extends Root {
           data.push(cursor.value);
           cursor.continue();
         } else {
-          callback(data.filter(item => this._isRelevantEntry(item)));
+          if (!this.isDestroyed) callback(data);
         }
       };
     });
   }
 
   _loadByIndex(tableName, indexName, indexValue, callback) {
-    if (this.isDisabled) return callback([]);
+    if (!this.tables[tableName]) return callback([]);
     this.onOpen(() => {
       const data = [];
       const range = window.IDBKeyRange.only(indexValue);
@@ -394,13 +412,14 @@ class DbManager extends Root {
               data.push(cursor.value);
               cursor.continue();
             } else {
-              callback(data.filter(item => this._isRelevantEntry(item)));
+              if (!this.isDestroyed) callback(data);
             }
           };
     });
   }
 
   deleteObjects(tableName, data, callback) {
+    if (!this.tables[tableName]) return callback ? callback() : null;
     this.onOpen(() => {
       const transaction = this.db.transaction([tableName], 'readwrite');
       const store = transaction.objectStore(tableName);
@@ -411,7 +430,7 @@ class DbManager extends Root {
 
   // Inspired by http://www.codeproject.com/Articles/744986/How-to-do-some-magic-with-indexedDB
   getObjects(tableName, ids, callback) {
-    if (this.isDisabled) return callback([]);
+    if (!this.tables[tableName]) return callback([]);
     const data = [];
     const sortedIds = ids.sort();
     for (let i = sortedIds.length - 1; i > 0; i--) {
@@ -440,7 +459,7 @@ class DbManager extends Root {
 
           // Done or check next
           if (index === sortedIds.length) {
-            callback(data.filter(item => this._isRelevantEntry(item)));
+            if (!this.isDestroyed) callback(data);
           } else {
             cursor.continue(sortedIds[index]);
           }
@@ -449,9 +468,10 @@ class DbManager extends Root {
   }
 
   claimSyncEvent(syncEvent, callback) {
+    if (!this.tables.syncQueue) return callback(true);
     this.onOpen(() => {
-      const transaction = this.db.transaction(['sync-queue'], 'readwrite');
-      const store = transaction.objectStore('sync-queue');
+      const transaction = this.db.transaction(['syncQueue'], 'readwrite');
+      const store = transaction.objectStore('syncQueue');
       store.get(syncEvent.id).onsuccess = evt => callback(Boolean(evt.target.result));
       store.delete(syncEvent.id);
     });
@@ -460,11 +480,11 @@ class DbManager extends Root {
   deleteTables(callback) {
     this.onOpen(() => {
       try {
-        const transaction = this.db.transaction(['conversations', 'identities', 'messages', 'sync-queue'], 'readwrite');
+        const transaction = this.db.transaction(['conversations', 'identities', 'messages', 'syncQueue'], 'readwrite');
         transaction.objectStore('conversations').clear();
         transaction.objectStore('identities').clear();
         transaction.objectStore('messages').clear();
-        transaction.objectStore('sync-queue').clear();
+        transaction.objectStore('syncQueue').clear();
         transaction.oncomplete = callback;
       } catch (e) {
         // Noop
@@ -484,9 +504,12 @@ DbManager.prototype.client = null;
 DbManager.prototype.isOpen = false;
 
 /**
- * @type {boolean} is db storage disabled?
+ * @type {Object} A list of tables that are enabled.
+ *
+ * Disabled tables are omitted or false.
+ * sync-events can only be enabled IF conversations and messages are enabled
  */
-DbManager.prototype.isDisabled = false;
+DbManager.prototype.tables = null;
 
 /**
  * @type IDBDatabase

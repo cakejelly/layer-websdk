@@ -532,6 +532,7 @@ class Message extends Syncable {
 
     const data = {
       parts: new Array(this.parts.length),
+      id: this.id,
     };
     if (notification) data.notification = notification;
 
@@ -741,10 +742,11 @@ class Message extends Syncable {
    * @param  {Object} m - Server description of the message
    */
   _populateFromServer(message) {
-    const tempId = this.id;
     this.id = message.id;
     this.url = message.url;
+    const oldPosition = this.position;
     this.position = message.position;
+
 
     // Assign IDs to preexisting Parts so that we can call getPartById()
     if (this.parts) {
@@ -777,13 +779,11 @@ class Message extends Syncable {
 
     this._setSynced();
 
-    if (tempId && tempId !== this.id) {
-      this._tempId = tempId;
-      this.getClient()._updateMessageId(this, tempId);
+    if (oldPosition && oldPosition !== this.position) {
       this._triggerAsync('messages:change', {
-        oldValue: tempId,
-        newValue: this.id,
-        property: 'id',
+        oldValue: oldPosition,
+        newValue: this.position,
+        property: 'position',
       });
     }
   }
@@ -1186,19 +1186,6 @@ Message.prototype.readStatus = Constants.RECIPIENT_STATE.NONE;
  * @type {String}
  */
 Message.prototype.deliveryStatus = Constants.RECIPIENT_STATE.NONE;
-
-
-/**
- * A locally created Message will get a temporary ID.
- *
- * Some may try to lookup the Message using the temporary ID even
- * though it may have later received an ID from the server.
- * Keep the temporary ID so we can correctly index and cleanup.
- *
- * @type {String}
- * @private
- */
-Message.prototype._tempId = '';
 
 /**
  * The time that this client created this instance.

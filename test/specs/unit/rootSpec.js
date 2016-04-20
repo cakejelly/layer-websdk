@@ -349,28 +349,6 @@ describe("The Root Class", function() {
       });
     });
 
-    describe("The _validateId() method", function() {
-      beforeEach(function() {
-        A.prefixUUID = "fred:///a/";
-        layer.Root.initClass(A, "A");
-      });
-
-      it("Should fail if prefix does not match", function() {
-        var a = new A({id: "fred:///b/"});
-        expect(a._validateId()).toBe(false);
-      });
-
-      it("Should fail if not a UUID", function() {
-        var a = new A({ id: "fred:///a/fred" });
-        expect(a._validateId()).toBe(false);
-      });
-
-      it("Should pass a correct id", function() {
-        var a = new A({ id: "fred:///a/ffffffff-ffff-ffff-ffff-ffffffffffff" });
-        expect(a._validateId()).toBe(true);
-      });
-    });
-
     describe("The toObject() method", function() {
       beforeEach(function() {
         A.prototype.y = 12;

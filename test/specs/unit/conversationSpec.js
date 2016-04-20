@@ -285,7 +285,41 @@ describe("The Conversation Class", function() {
           conversation.send(m);
 
           // Posttest
-          expect(conversation.lastMessage.position).toBe(6);
+          expect(conversation.lastMessage.position > mOld.position).toBe(true);
+        });
+
+        it("Should update the lastMessage position property to higher position the more time has passed", function(done) {
+          jasmine.clock().uninstall();
+
+          mOld = new layer.Message({
+            client: client,
+            parts: [{body: "hey", mimeType: "text/plain"}]
+          });
+          mOld.position = 5;
+          conversation.lastMessage = mOld;
+          m = new layer.Message({
+            client: client,
+            parts: [{body: "hey", mimeType: "text/plain"}]
+          });
+
+          m2 = new layer.Message({
+            client: client,
+            parts: [{body: "ho", mimeType: "text/plain"}]
+          });
+
+          // Run
+          conversation.send(m);
+          var position1 = m.position;
+
+          // Reset
+          conversation.lastMessage = mOld;
+
+          // Retest on m2
+          setTimeout(function() {
+            conversation.send(m2);
+            expect(m2.position > position1).toBe(true, (m2.position + " | " + position1));
+            done();
+          }, 100);
         });
 
         it("Should set the lastMessage position property to 0 if no prior message", function() {
@@ -417,6 +451,7 @@ describe("The Conversation Class", function() {
             participants: ["a", client.userId],
             distinct: true,
             metadata: {hey: "ho"},
+            id: conversation.id
           }
         });
       });
@@ -429,6 +464,7 @@ describe("The Conversation Class", function() {
         expect(conversation._getSendData()).toEqual({
           method: 'Conversation.create',
           data: {
+            id: conversation.id,
             participants: ["a", client.userId],
             distinct: true,
             metadata: null
@@ -772,19 +808,6 @@ describe("The Conversation Class", function() {
                     newValue: conversation.id,
                     property: 'id',
                 });
-        });
-
-        it("Should write a _tempId property", function() {
-            // Setup
-            spyOn(conversation, "_triggerAsync");
-            var initialId = conversation.id;
-
-            // Run
-            conversation._populateFromServer(c);
-
-            // Posttest
-            expect(conversation._tempId).toEqual(initialId);
-            expect(conversation.id).not.toEqual(initialId);
         });
 
         it("Should setup lastMessage", function() {
