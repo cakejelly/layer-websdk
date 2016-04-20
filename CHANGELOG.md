@@ -1,5 +1,9 @@
 # Javascript SDK Change Log
 
+## 1.0.1
+
+* Adds `isTrustedDevice` property to layer.Client which defaults to false.  If this is false, session tokens will NOT be written to localStorage, and will not be restored next time the page reloads.
+
 ## 1.0.0
 
 * Updated version number and language from beta to GA

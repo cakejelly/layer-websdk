@@ -75,6 +75,20 @@ describe("The Client Authenticator Class", function() {
             layer.ClientAuthenticator.prototype._restoreLastSession = tmp;
         });
 
+        it("Should not call _restoreLastSession if not isTrustedDevice", function() {
+            var tmp = layer.ClientAuthenticator.prototype._restoreLastSession;
+            spyOn(layer.ClientAuthenticator.prototype, "_restoreLastSession");
+
+            var clientLocal = new layer.ClientAuthenticator({
+                appId: appId,
+                url: "https://duh.com",
+                userId: "Fred"
+            });
+
+            expect(layer.ClientAuthenticator.prototype._restoreLastSession).not.toHaveBeenCalled();
+            layer.ClientAuthenticator.prototype._restoreLastSession = tmp;
+        });
+
         it("Should call _restoreLastSession if a userId is passed", function() {
             var tmp = layer.ClientAuthenticator.prototype._restoreLastSession;
             spyOn(layer.ClientAuthenticator.prototype, "_restoreLastSession");
@@ -86,11 +100,13 @@ describe("The Client Authenticator Class", function() {
             var clientLocal = new layer.ClientAuthenticator({
                 appId: appId,
                 userId: "Fred",
+                isTrustedDevice: true,
                 url: "https://duh.com"
             });
 
             expect(layer.ClientAuthenticator.prototype._restoreLastSession).toHaveBeenCalledWith({
                 appId: appId,
+                isTrustedDevice: true,
                 url: "https://duh.com"
             }, "Fred", "Joe");
             layer.ClientAuthenticator.prototype._restoreLastSession = tmp;

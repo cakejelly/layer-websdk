@@ -56,17 +56,22 @@ class ClientAuthenticator extends Root {
    *          userId: "fred"
    *      });
    *
+   * For trusted devices, you can enable storage of data to indexedDB and localStorage with the `isTrustedDevice` property:
+   *
+   *      var client = new Client({
+   *          appId: "layer:///apps/staging/uuid",
+   *          userId: "fred",
+   *          isTrustedDevice: true
+   *      });
+   *
    * @method constructor
    * @param  {Object} options
    * @param  {string} options.appId           - "layer:///apps/production/uuid"; Identifies what
    *                                            application we are connecting to.
    * @param  {string} [options.url=https://api.layer.com] - URL to log into a different REST server
-   * @param  {string} [options.userId='']       - If you provide a userId, we will
-   *                                            compare the userId against the one in localStorage
-   *                                            to validate use of the cached sessionToken.  This is
-   *                                            useful for insuring a change in users in your app
-   *                                            gets a change in Layer Sessions.  Failure to provide this
-   *                                            parameter means that we will NOT restore the session token.
+   * @param {boolean} [options.isTrustedDevice=false] - If this is a trusted device, the sessionToken will be written to localStorage
+   *                                                    for faster reauthentication on reloading.
+   * @param  {string} [options.userId='']     - If you provide a userId, AND if isTrustedDevice is true, we will attempt to restore this user's session.
    * @param {number} [options.logLevel=ERROR] - Provide a log level that is one of layer.Constants.LOG.NONE, layer.Constants.LOG.ERROR,
    *                                            layer.Constants.LOG.WARN, layer.Constants.LOG.INFO, layer.Constants.LOG.DEBUG
    */
@@ -94,8 +99,10 @@ class ClientAuthenticator extends Root {
     this.url = this.url.replace(/\/$/, '');
 
     // If we've been provided with a user id as a parameter, attempt to restore the session.
-    if (requestedUserId) {
+    if (requestedUserId && this.isTrustedDevice) {
       this._restoreLastSession(options, requestedUserId, cachedUserId);
+    } else if (global.localStorage) {
+      localStorage.removeItem(LOCALSTORAGE_KEYS.SESSIONDATA + this.appId);
     }
   }
 
@@ -392,7 +399,7 @@ class ClientAuthenticator extends Root {
     // NOTE: We store both items of data in a single key because someone listening for storage
     // events is listening for an asynchronous change, and we need to gaurentee that both
     // userId and session are available.
-    if (global.localStorage) {
+    if (global.localStorage && this.isTrustedDevice) {
       try {
         global.localStorage[LOCALSTORAGE_KEYS.SESSIONDATA + this.appId] = JSON.stringify({
           sessionToken: this.sessionToken || '',
@@ -992,6 +999,12 @@ Object.defineProperty(ClientAuthenticator.prototype, 'logLevel', {
   get: function get() { return logger.level; },
   set: function set(value) { logger.level = value; },
 });
+
+/**
+ * If this is a trusted device, then we can write personal data to persistent memory.
+ * @type {boolean}
+ */
+ClientAuthenticator.prototype.isTrustedDevice = false;
 
 /**
  * Time to be offline after which we don't do a WebSocket Events.replay,
