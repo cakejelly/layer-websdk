@@ -597,8 +597,8 @@ describe("The Client class", function() {
             expect(client._scheduleCheckAndPurgeCache).not.toHaveBeenCalled();
         });
 
-        it("Should call _checkAndPurgeCache on prior lastMessage", function() {
-            spyOn(client, "_checkAndPurgeCache");
+        it("Should call _scheduleCheckAndPurgeCache on prior lastMessage", function() {
+            spyOn(client, "_scheduleCheckAndPurgeCache");
             var lastMessage = conversation.lastMessage;
             lastMessage.position = 1;
 
@@ -611,11 +611,11 @@ describe("The Client class", function() {
             client._addMessage(m);
 
             // Posttest
-            expect(client._checkAndPurgeCache).toHaveBeenCalledWith([lastMessage]);
+            expect(client._scheduleCheckAndPurgeCache).toHaveBeenCalledWith(lastMessage);
         });
 
-        it("Should not call _checkAndPurgeCache if no lastMessage", function() {
-            spyOn(client, "_checkAndPurgeCache");
+        it("Should not call _scheduleCheckAndPurgeCache if no lastMessage", function() {
+            spyOn(client, "_scheduleCheckAndPurgeCache");
             conversation.lastMessage = null;
             client._messagesHash = {};
 
@@ -623,7 +623,7 @@ describe("The Client class", function() {
             client._addMessage(message);
 
             // Posttest
-            expect(client._checkAndPurgeCache).not.toHaveBeenCalled();
+            expect(client._scheduleCheckAndPurgeCache).not.toHaveBeenCalled();
         });
     });
 

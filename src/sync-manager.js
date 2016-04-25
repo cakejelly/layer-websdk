@@ -130,7 +130,7 @@ class SyncManager extends Root {
     // Fire the request if there aren't any existing requests already being processed.
     // If this isn't the first item, assume that all necessary logic exists to fire the
     // existing requests and then it will move onto this request.
-    if (this.queue.length === 1) {
+    if (this.queue.length === 1 || !this.queue[0].isFiring) {
       this._processNextRequest();
     }
   }
@@ -194,6 +194,20 @@ class SyncManager extends Root {
     }
   }
 
+  /**
+   * Is the syncEvent still valid?
+   *
+   * This method specifically tests to see if some other tab has already sent this request.
+   * If persistence of the syncQueue is not enabled, then the callback is immediately called with true.
+   * If another tab has already sent the request, then the entry will no longer be in indexedDB and the callback
+   * will call false.
+   *
+   * @method _validateRequest
+   * @param {layer.SyncEvent} syncEvent
+   * @param {Function} callback
+   * @param {Function} callback.isValid - The request is still valid
+   * @private
+   */
   _validateRequest(syncEvent, callback) {
     this.client.dbManager.claimSyncEvent(syncEvent, isFound => callback(isFound));
   }
@@ -557,7 +571,14 @@ class SyncManager extends Root {
     super.destroy();
   }
 
-
+  /**
+   * Load any unsent requests from indexedDB.
+   *
+   * If persistence is disabled, nothing will happen;
+   * else all requests found in the database will be added to the queue.
+   * @method _loadPersistedQueue
+   * @private
+   */
   _loadPersistedQueue() {
     this.client.dbManager.loadSyncQueue(data => {
       if (data.length) {

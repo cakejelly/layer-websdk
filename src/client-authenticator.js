@@ -4,6 +4,7 @@
 
   var client = new layer.Client({
     appId: "layer:///apps/staging/ffffffff-ffff-ffff-ffff-ffffffffffff",
+    isTrustedDevice: false,
     challenge: function(evt) {
       myAuthenticator({
         nonce: evt.nonce,
@@ -141,12 +142,21 @@ class ClientAuthenticator extends Root {
   }
 
 
+  /**
+   * Is Persisted Session Tokens disabled?
+   *
+   * @method _isPersistedSessionsDisabled
+   * @returns {Boolean}
+   * @private
+   */
   _isPersistedSessionsDisabled() {
     return !global.localStorage || this.persistenceFeatures && !this.persistenceFeatures.sessionToken;
   }
 
   /**
    * Restore the sessionToken from localStorage.
+   *
+   * This sets the sessionToken rather than returning the token.
    *
    * @method _restoreLastSession
    * @private
@@ -156,12 +166,25 @@ class ClientAuthenticator extends Root {
     try {
       const sessionData = global.localStorage[LOCALSTORAGE_KEYS.SESSIONDATA + this.appId];
       if (!sessionData) return;
-      this.sessionToken = JSON.parse(sessionData).sessionToken;
+      const parsedData = JSON.parse(sessionData);
+      if (parsedData.expires < Date.now()) {
+        global.localStorage.removeItem(LOCALSTORAGE_KEYS.SESSIONDATA + this.appId);
+      } else {
+        this.sessionToken = parsedData.sessionToken;
+      }
     } catch (error) {
       // No-op
     }
   }
 
+  /**
+   * Has the userID changed since the last login?
+   *
+   * @method _hasUserIdChanged
+   * @param {string} userId
+   * @returns {boolean}
+   * @private
+   */
   _hasUserIdChanged(userId) {
     try {
       const sessionData = global.localStorage[LOCALSTORAGE_KEYS.SESSIONDATA + this.appId];
@@ -171,8 +194,6 @@ class ClientAuthenticator extends Root {
       return true;
     }
   }
-
-  /* CONNECT METHODS BEGIN */
 
   /**
    * Initiates the connection.
@@ -184,10 +205,10 @@ class ClientAuthenticator extends Root {
    *
    * @method connect
    * @param {string} userId - User ID of the user you are logging in as
-   *
-   * TODO: WEB-958: Use a dedicated session validation endpoint instead of this...
+   * @returns {layer.ClientAuthenticator} this
    */
   connect(userId) {
+    this.isConnected = false;
     if (!this.isTrustedDevice || !userId || this._isPersistedSessionsDisabled() || this._hasUserIdChanged(userId)) {
       this._clearStoredData();
     }
@@ -196,15 +217,7 @@ class ClientAuthenticator extends Root {
     }
     this.userId = userId;
     if (this.sessionToken) {
-      // This will return an error with a nonce if the token is not valid.
-      this.xhr({
-        url: '/messages/ffffffff-ffff-ffff-ffff-ffffffffffff',
-        method: 'GET',
-        sync: false,
-        headers: {
-          'content-type': 'application/json',
-        },
-      }, (result) => this._connectionWithSessionResponse(result));
+      this._sessionTokenRestored();
     } else {
       this.xhr({
         url: '/nonces',
@@ -212,27 +225,36 @@ class ClientAuthenticator extends Root {
         sync: false,
       }, (result) => this._connectionResponse(result));
     }
+    return this;
   }
 
   /**
-   * Called when our test of our last sessionToken gets a response.
+   * Initiates the connection with a session token.
    *
-   * If the response is an error, call _sessionTokenExpired with the new nonce
-   * returned in the error.
+   * This call is for use when you have received a Session Token from some other source; such as your server,
+   * and wish to use that instead of doing a full auth process.
    *
-   * If the response is successful, then, well, we have Conversations, and can call _sessionTokenRestored
-   * with those Conversations.
+   * The Client will presume the token to be valid, and will asynchronously trigger the `ready` event.
+   * If the token provided is NOT valid, this won't be detected until a request is made using this token,
+   * at which point the `challenge` method will trigger.
    *
-   * @private
-   * @method _connectionWithSessionResponse
-   * @param  {Object} result
+   * NOTE: The `connected` event will not be triggered on this path.
+   *
+   * @method connectWithSession
+   * @param {String} userId
+   * @param {String} sessionToken
+   * @returns {layer.ClientAuthenticator} this
    */
-  _connectionWithSessionResponse(result) {
-    if (!result.success && result.data.getNonce()) {
-      this._sessionTokenExpired(result.data.getNonce());
-    } else {
-      this._sessionTokenRestored(result.data);
+  connectWithSession(userId, sessionToken) {
+    if (!userId || !sessionToken) throw new Error(LayerError.dictionary.sessionAndUserRequired);
+    if (!this.isTrustedDevice || this._isPersistedSessionsDisabled() || this._hasUserIdChanged(userId)) {
+      this._clearStoredData();
     }
+    this.onlineManager.start();
+
+    this.userId = userId;
+    this.isConnected = true;
+    setTimeout(() => this._authComplete({ session_token: sessionToken }), 1);
   }
 
   /**
@@ -386,6 +408,7 @@ class ClientAuthenticator extends Root {
         global.localStorage[LOCALSTORAGE_KEYS.SESSIONDATA + this.appId] = JSON.stringify({
           sessionToken: this.sessionToken || '',
           userId: this.userId || '',
+          expires: Date.now() + 30 * 60 * 60 * 24,
         });
       } catch (e) {
         // Do nothing
@@ -425,26 +448,10 @@ class ClientAuthenticator extends Root {
   _sessionTokenRestored() {
     this.isConnected = true;
     this.trigger('connected');
+    this.onlineManager.start();
     this.isAuthenticated = true;
     this.trigger('authenticated');
     this._clientReady();
-  }
-
-  /**
-   * Tried to reuse a cached sessionToken but was rejected.
-   *
-   * On failing to restore a sessionToken stored in localStorage,
-   * Start the connect() process anew.
-   *
-   * @method _sessionTokenExpired
-   * @private
-   */
-  _sessionTokenExpired(nonce) {
-    this.sessionToken = '';
-    if (global.localStorage) {
-      localStorage.removeItem(LOCALSTORAGE_KEYS.SESSIONDATA + this.appId);
-    }
-    this._authenticate(nonce);
   }
 
   /**

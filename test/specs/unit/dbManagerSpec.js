@@ -821,6 +821,18 @@ describe("The DbManager Class", function() {
         expect(dbManager._createConversation).toHaveBeenCalledWith(rawConversation);
       });
 
+      it("Should not call _createConversation for deleted conversationIds", function() {
+        var rawConversation = dbManager._getConversationData([conversation])[0];
+        spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+          expect(ids.indexOf(rawSyncEvents[0].target) === -1).toBe(true);
+          callback([]);
+        });
+        spyOn(dbManager, "_createConversation");
+        rawSyncEvents[0].operation = "DELETE";
+        dbManager._loadSyncEventRelatedData(rawSyncEvents, function() {});
+        expect(dbManager._createConversation).not.toHaveBeenCalledWith(rawConversation);
+      });
+
       it("Should call _loadSyncEventResults", function() {
         spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
           callback([]);
@@ -869,6 +881,18 @@ describe("The DbManager Class", function() {
             url: "howdy",
             createdAt: now,
             fromDB: false
+          }),
+          new layer.XHRSyncEvent({
+            target: conversation.id + 'b',
+            depends: [],
+            operation: "DELETE",
+            id: "derf",
+            data: {ho: "hey"},
+            headers: {accept: 'ho'},
+            method: "DELETE",
+            url: "howdy",
+            createdAt: now,
+            fromDB: false
           })
         ];
         client._messagesHash[message.id] = message;
@@ -899,6 +923,14 @@ describe("The DbManager Class", function() {
           result = events;
         });
         expect(result.filter(item => item.target == conversation.id + 'a')).toEqual([]);
+      });
+
+      it("Should not filter out SyncEvents whose target cant be found if its a DELETE operation", function() {
+        var result;
+        dbManager._loadSyncEventResults(dbManager._getSyncEventData(syncEvents), function(events) {
+          result = events;
+        });
+        expect(result.filter(item => item.target == conversation.id + 'b')[0].id).toEqual(syncEvents[2].id);
       });
     });
 

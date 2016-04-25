@@ -154,6 +154,7 @@ LayerError.dictionary = {
   contentRequired: 'MessagePart requires rich content for this call',
   alreadyDestroyed: 'This object has already been destroyed',
   deletionModeUnsupported: 'Call to deletion was made with an unsupported deletion mode',
+  sessionAndUserRequired: 'connectWithSession requires both a userId and a sessionToken',
 };
 
 module.exports = LayerError;

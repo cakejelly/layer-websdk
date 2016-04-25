@@ -386,7 +386,7 @@ class Client extends ClientAuth {
       if (conversation && (!conversation.lastMessage || conversation.lastMessage.position < message.position)) {
         const lastMessageWas = conversation.lastMessage;
         conversation.lastMessage = message;
-        if (lastMessageWas) this._checkAndPurgeCache([lastMessageWas]);
+        if (lastMessageWas) this._scheduleCheckAndPurgeCache(lastMessageWas);
       } else {
         this._scheduleCheckAndPurgeCache(message);
       }

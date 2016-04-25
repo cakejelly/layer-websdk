@@ -72,13 +72,33 @@ This README contains everything you need to get started.  But is NOT an exhausti
 
 ## Getting Started
 
-To start using Layer's Web SDK, you need to initialize a client with your Layer Application ID which can be found in the [Developer Dashboard](https://developer.layer.com/projects/keys).
+To start using Layer's Web SDK, you need to
+
+1. Initialize a layer.Client
+2. Connect to Layer
+3. Setup event handlers
+
+### 1. Initializing a Client
+
+Initialize a client with your Layer Application ID which can be found in the [Developer Dashboard](https://developer.layer.com/projects/keys).
 
 ```javascript
 var client = new layer.Client({
     appId: LAYER_APP_ID
 });
 ```
+
+### 2. Connect to Layer
+
+To start the client, you will call the `connect` method with the userId of the user you are authenticating as:
+
+```javascript
+client.connect('Frodo_the_Dodo');
+```
+
+This call will start the authentication process.  If using the `layer.Client.isTrustedDevice` property, it may try to restore your last Session Token and skip authentication.
+
+### 3. Setup Event handlers
 
 The client requires two event handlers to get started:
 
@@ -277,7 +297,8 @@ The full sequence may look like:
 
 ```javascript
 var client = new layer.Client({
-    appId: LAYER_APP_ID
+    appId: LAYER_APP_ID,
+    isTrustedDevice: false
 });
 
 client.on('challenge', function(evt) {
@@ -291,13 +312,20 @@ Note that `evt.callback` must be called to provide the Layer Client with the ide
 
 ### Reusing the previous Authorization?
 
-When reloading a web page, the framework will try to restore the last session.  However, it will only do this **if** you provide a `userId` parameter AND if that parameter matches the name associated with the last session:
+If the client receives the `isTrustedDevice` property, then it will store your user's last Session Token in localStorage.
+
+When reloading a web page, the framework will try to restore the last session.  However, it will only do this if:
+
+1. `isTrustedDevice` is true
+2. A `userId` property is provided
+3. The `userId` property matches the userId of the last user to login
 
 ```javascript
 var client = new layer.Client({
     appId: LAYER_APP_ID,
-    userId: 'Frodo_the_Dodo'
+    isTrustedDevice: true
 });
+client.connect('Frodo_the_Dodo');
 ```
 
 * If there is no session cached for Frodo_the_Dodo, then your `challenge` event handler will be called.
@@ -408,6 +436,68 @@ message.on("messages:loaded", function() {
 });
 ```
 The `messages:loaded` event will be called immediately if its already loaded.
+
+## Persistence
+
+Options exist to cache data on in browser.  All of these capabilities are protected by the `isTrustedDevice` property.  If the device is not trusted, no data will be stored.  This is the default state.  But if you set `isTrustedState` to true, then data can be saved.
+
+```javascript
+var client = new layer.Client({
+  appId: LAYER_APP_ID,
+  isTrustedDevice: true
+});
+```
+
+By default, the following types of data are stored:
+
+* Conversations
+* Messages
+* Identity data for the people this user chats with
+* Server Requests that have not yet completed
+* Session Token
+
+Applications can configure which of these tables are used by using the `persistenceFeatures` property:
+
+```javascript
+var client = new layer.Client({
+  appId: LAYER_APP_ID,
+  isTrustedDevice: true,
+  persistenceFeatures: {
+    messages: false,
+    conversations: true,
+    identities: false,
+    syncQueue: true,
+    sessionToken: true
+  }
+});
+```
+
+Cordova and other installed apps would typically just have everything set to `true` (i.e. just use `isTrustedDevice` and use the default `persistenceFeatures`).  Below are discussions of why you should/should not store various types of data.
+
+### Persisting Messages
+
+Even if this is a trusted device, if your Messages contain credit card numbers, illicit liasons, etc... you may want to Never store this data in the browser.  Storing Messages allows the client to display messages within Conversations without waiting for any server connection.
+
+### Persisting Conversations
+
+While this is generally safer than storing Messages,
+
+1. If your metadata contains sensitive information, you should consider whether it should be stored
+2. Apps where user ids in Conversations are easily mapped to real users would potentially expose who a person is talking to.
+
+Storing these allows a user to quickly see their Conversation list even without a connection.
+
+### Identities
+
+Identities are used to help render information about people in Conversations or who you may want to start a Conversation with.  Storing identities allows this data to be quickly available and easily kept in sync, allowing for quicker start time.  You control what goes in the Identity from your servers via https://developer.layer.com/docs/platform/users#managing-identity.  If your writing phone numbers, email addresses, or other information that may be sensitive, consider whether these benefits are appropriate.
+
+### Server Requests
+
+The `syncQueue` property, if true, allows any unsent request to be written to persistent memory and completed when the app is next relaunched.  If `messages` or `conversations` are disabled, then so is caching of Server Requests.
+
+### Session Token
+
+Typically if a device is trusted, then you'd expect it to be easy to re-login.  If this is not the case, you can change this to false.
 
 ## Change Events
 

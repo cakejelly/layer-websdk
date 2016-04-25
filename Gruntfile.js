@@ -302,7 +302,7 @@ module.exports = function (grunt) {
   grunt.loadNpmTasks('grunt-remove');
   grunt.registerTask('debug', ['browserify:debug']);
   grunt.registerTask('buildmin', ['browserify:build', 'uglify', 'remove:build']);
-  grunt.registerTask('build', ['debug', 'buildmin']);
+  grunt.registerTask('build', ['debug', 'buildmin', 'babel:dist']);
   grunt.registerTask('prepublish', ['babel:dist']);
 
   // Documentation

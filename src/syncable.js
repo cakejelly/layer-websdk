@@ -99,6 +99,14 @@ class Syncable extends Root {
     return !(this.isNew() || this.isSaving());
   }
 
+  /**
+   * Object is fully synced.
+   *
+   * As best we know, server and client have the same values.
+   *
+   * @method isSynced
+   * @returns {boolean}
+   */
   isSynced() {
     return this.syncState === Constants.SYNC_STATE.SYNCED;
   }

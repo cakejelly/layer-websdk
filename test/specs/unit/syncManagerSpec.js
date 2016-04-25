@@ -263,11 +263,20 @@ describe("The SyncManager Class", function() {
             expect(syncManager._processNextRequest).toHaveBeenCalledWith();
         });
 
-        it("Should not fire any requests if its NOT the first request in the queue", function() {
+        it("Should not fire any requests if there are firing requests in the queue", function() {
             syncManager.queue = [new layer.XHRSyncEvent({})];
+            syncManager.queue[0].isFiring = true;
             spyOn(syncManager, "_processNextRequest");
             syncManager.request(evt);
             expect(syncManager._processNextRequest).not.toHaveBeenCalled();
+        });
+
+        it("Should fire requests if there are nonfiring requests in the queue", function() {
+            syncManager.queue = [new layer.XHRSyncEvent({})];
+            syncManager.queue[0].isFiring = false;
+            spyOn(syncManager, "_processNextRequest");
+            syncManager.request(evt);
+            expect(syncManager._processNextRequest).toHaveBeenCalledWith();
         });
     });
 
