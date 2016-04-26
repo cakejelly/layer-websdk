@@ -555,13 +555,14 @@ class SyncManager extends Root {
    * @param  {layer.SyncEvent} evt - Delete event that requires removal of other events
    */
   _purgeOnDelete(evt) {
-    this.queue.filter(request => request.depends.indexOf(evt.target) !== -1 && evt !== request).forEach(requestEvt => {
-      this.trigger('sync:abort', {
-        target: requestEvt.target,
-        request: requestEvt,
+    this.queue.filter(request => request.depends.indexOf(evt.target) !== -1 && evt !== request)
+      .forEach(requestEvt => {
+        this.trigger('sync:abort', {
+          target: requestEvt.target,
+          request: requestEvt,
+        });
+        this._removeRequest(requestEvt);
       });
-      this._removeRequest(requestEvt);
-    });
   }
 
 

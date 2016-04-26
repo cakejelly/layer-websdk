@@ -1179,8 +1179,6 @@ Query.prototype._initialPaginationWindow = 100;
  */
 Query.prototype.predicate = null;
 
-Query.prototype.persistenceEnabled = false;
-
 Query.prototype.isReset = true;
 
 /**
