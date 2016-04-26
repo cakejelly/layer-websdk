@@ -1,4 +1,5 @@
 /*eslint-disable */
+console.log("THE DBMANAGER CLASS");
 describe("The DbManager Class", function() {
     var appId = "Fred's App";
 
@@ -922,7 +923,9 @@ describe("The DbManager Class", function() {
         dbManager._loadSyncEventResults(dbManager._getSyncEventData(syncEvents), function(events) {
           result = events;
         });
-        expect(result.filter(item => item.target == conversation.id + 'a')).toEqual([]);
+        expect(result.filter(function(item) {
+          return item.target == conversation.id + 'a';
+        })).toEqual([]);
       });
 
       it("Should not filter out SyncEvents whose target cant be found if its a DELETE operation", function() {
@@ -930,11 +933,14 @@ describe("The DbManager Class", function() {
         dbManager._loadSyncEventResults(dbManager._getSyncEventData(syncEvents), function(events) {
           result = events;
         });
-        expect(result.filter(item => item.target == conversation.id + 'b')[0].id).toEqual(syncEvents[2].id);
+
+        expect(result.filter(function(item) {
+          return item.target == conversation.id + 'b';
+        })[0].id).toEqual(syncEvents[2].id);
       });
     });
 
-    describe("The _loadAll() method", function() {
+describe("The _loadAll() method", function() {
       var m1, m2, m3, m4;
       beforeEach(function(done) {
         m1 = conversation.createMessage("m1");
@@ -1035,69 +1041,5 @@ describe("The DbManager Class", function() {
       });
     });
 
-    describe("The deleteTables() method", function() {
-      beforeEach(function(done) {
-        var m1 = conversation.createMessage("m1");
-        var m2 = conversation.createMessage("m2");
-        var m3 = conversation.createMessage("m3");
-        var m4 = conversation.createMessage("m4");
-        dbManager._writeObjects('messages', dbManager._getMessageData([m1, m2, m3, m4]), false, function() {
-          var c1 = client.createConversation(["c1"]);
-          var c2 = client.createConversation(["c2"]);
-          dbManager._writeObjects('conversations', dbManager._getConversationData([c1, c2]), false, function() {
-            var s1 = new layer.XHRSyncEvent({});
-            var s2 = new layer.XHRSyncEvent({});
-            dbManager._writeObjects('syncQueue', dbManager._getSyncEventData([s1, s2]), false, done);
-            client.syncManager.queue = [];
-          });
-        });
-      });
-      it("Should delete all data from all tables", function(done) {
-        dbManager.deleteTables(function() {
-          dbManager._loadAll('conversations', function(cResult) {
-            expect(cResult).toEqual([]);
-            dbManager._loadAll('messages', function(mResult) {
-              expect(mResult).toEqual([]);
-              dbManager._loadAll('syncQueue', function(sResult) {
-                expect(sResult).toEqual([]);
-                done();
-              });
-            });
-          });
-        });
-      });
-    });
 
-    describe("The claimSyncEvent() method", function() {
-      var syncEvent;
-      beforeEach(function(done) {
-        syncEvent = new layer.XHRSyncEvent({
-          target: "fred",
-          depends: ["joe", "fred"],
-          operation: "brain removal",
-          data: {
-            zombieCount: "cant count without brains"
-          },
-          url: "sue",
-          headers: {'content-type': 'mountain/text'},
-          method: 'POST',
-          createdAt: new Date("2010-10-10")
-        });
-        dbManager.writeSyncEvents([syncEvent], false, done);
-      });
-
-      it("Should only allow a single request to work", function(done) {
-        var callbackCount = 0, successCount = 0;
-        for (var i = 0; i < 2; i++) {
-          dbManager.claimSyncEvent(syncEvent, function(result) {
-            callbackCount++;
-            if (result) successCount++;
-            if (callbackCount == 2) {
-              expect(successCount).toEqual(1);
-              done();
-            }
-          });
-        }
-      });
-    });
 });
