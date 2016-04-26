@@ -170,7 +170,6 @@ class Client extends ClientAuth {
   }
 
   destroy() {
-    window.removeEventListener('unload', this._onWindowUnload);
 
     // Cleanup all plugins
     Object.keys(Client.plugins).forEach(propertyName => {
