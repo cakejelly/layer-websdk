@@ -373,6 +373,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should set the userId", function() {
         // Pretest
+        client._initComponents();
         expect(client.userId).toEqual('');
 
         // Run
@@ -384,6 +385,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should start the onlineManager", function() {
         // Setup
+        client._initComponents();
         spyOn(client.onlineManager, "start");
 
         // Run
@@ -395,6 +397,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should call _clearStoredData if not a trusted device", function() {
         // Setup
+        client._initComponents();
         client.isTrustedDevice = false;
         spyOn(client, "_clearStoredData");
 
@@ -407,6 +410,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should call _clearStoredData if a trusted device with userId but persistedSessions disabled", function() {
         // Setup
+        client._initComponents();
         client.isTrustedDevice = true;
         spyOn(client, "_clearStoredData");
         spyOn(client, "_isPersistedSessionsDisabled").and.returnValue(true);
@@ -420,6 +424,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should call _clearStoredData if a trusted device with userId and persistedSessions enabled but userId has changed", function() {
         // Setup
+        client._initComponents();
         client.isTrustedDevice = true;
         spyOn(client, "_clearStoredData");
         spyOn(client, "_isPersistedSessionsDisabled").and.returnValue(false);
@@ -434,6 +439,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should not call _clearStoredData if a trusted device with userId and persistedSessions enabled and userId has not changed", function() {
         // Setup
+        client._initComponents();
         client.isTrustedDevice = true;
         spyOn(client, "_clearStoredData");
         spyOn(client, "_isPersistedSessionsDisabled").and.returnValue(false);
@@ -450,6 +456,7 @@ describe("The Client Authenticator Class", function() {
 
       it("Should call _authComplete asynchronously", function() {
         // Setup
+        client._initComponents();
         spyOn(client, "_authComplete");
 
         // Run
