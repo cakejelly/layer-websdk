@@ -984,7 +984,7 @@ ClientAuthenticator.prototype.isTrustedDevice = false;
  * * messages: Write messages to indexedDB? This allows for full offline access
  * * syncQueue: Write requests made while offline to indexedDB?  This allows the app
  *              to complete sending messages after being relaunched.
- * * sessionToken: Write the session token to localStorage for quick reauthentication on relaunching the
+ * * sessionToken: Write the session token to localStorage for quick reauthentication on relaunching the app.
  *
  *      new layer.Client({
  *        isTrustedDevice: true,

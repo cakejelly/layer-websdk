@@ -12,7 +12,9 @@
   * Use of "temp_layer:///" IDs is removed.
 * Authentication
   * Client initialization no longer takes a `userId` parameter, and no longer immediately begins the authentication process
+  * Client initialization no longer takes a `sessionToken` parameter
   * layer.Client.connect is now called to start authentication
+  * layer.Client.connectWithSession can also be used to startup the client, if you already have a Session Token.
   * layer.Client.login has been removed; see layer.Client.connect instead
 * layer.Constants
   * Adds layer.Constants.DELETION_MODE.MY_DEVICES for layer.Message.delete() and layer.Conversation.delete()
