@@ -482,12 +482,22 @@ describe("The Client class", function() {
             expect(client.getMessage(message.id)).toBe(message);
         });
 
-        it("Should load by id", function() {
+        it("Should load Message by id", function() {
             var newId = message.id + "a";
             var m1 = client.getMessage(newId, true);
 
             // Posttest
             expect(m1 instanceof layer.Message).toBe(true);
+            expect(m1.id).toEqual(newId);
+            expect(requests.mostRecent().url).toEqual(client.url + newId.replace(/layer\:\/\//,""));
+        });
+
+        it("Should load Announcement by id", function() {
+            var newId = message.id.replace(/messages/, 'announcements');
+            var m1 = client.getMessage(newId, true);
+
+            // Posttest
+            expect(m1 instanceof layer.Announcement).toBe(true);
             expect(m1.id).toEqual(newId);
             expect(requests.mostRecent().url).toEqual(client.url + newId.replace(/layer\:\/\//,""));
         });
@@ -714,11 +724,16 @@ describe("The Client class", function() {
     });
 
     describe("The _getObject() method", function() {
-        var message, conversation, query;
+        var message, announcement, conversation, query;
         beforeEach(function() {
             client._clientReady();
             conversation = client.createConversation(["a"]);
             message = conversation.createMessage("hey").send();
+            announcement = new layer.Announcement({
+              client: client,
+              parts: "Hey Ho"
+            });
+            client._addMessage(announcement);
             query = client.createQuery({
                 model: "Conversation"
             });
@@ -732,7 +747,9 @@ describe("The Client class", function() {
                 qHash = {};
             cHash[conversation.id] = conversation;
             mHash[message.id] = message;
+            mHash[announcement.id] = announcement;
             qHash[query.id] = query;
+
             expect(client._conversationsHash).toEqual(cHash);
             expect(client._messagesHash).toEqual(mHash);
             expect(client._queriesHash).toEqual(qHash);
@@ -754,6 +771,14 @@ describe("The Client class", function() {
             expect(client._getObject(message.id + "a")).toBe(undefined);
         });
 
+        it("Should get an Announcement", function() {
+            expect(client._getObject(announcement.id)).toBe(announcement);
+        });
+
+        it("Should not get an Announcement", function() {
+            expect(client._getObject(announcement.id + "a")).toBe(undefined);
+        });
+
         it("Should get a Query", function() {
             expect(client._getObject(query.id)).toBe(query);
         });
@@ -768,6 +793,22 @@ describe("The Client class", function() {
     });
 
     describe("The _createObject() method", function() {
+        it("Should call _populateFromServer if found", function() {
+          // Setup
+          var m = client.createConversation(["a"]).createMessage("a").send();
+          spyOn(m, "_populateFromServer");
+
+          // Pretest
+          expect(client.getMessage(m.id)).toBe(m);
+
+          // Run
+          var result = client._createObject(m.toObject());
+
+          // Posttest
+          expect(result).toBe(m);
+          expect(m._populateFromServer).toHaveBeenCalledWith(m.toObject());
+        });
+
         it("Should call Message._createFromServer", function() {
             // Setup
             var tmp = layer.Message._createFromServer;
@@ -780,10 +821,32 @@ describe("The Client class", function() {
 
             // Posttest
             expect(message).toBe(m);
-            expect(layer.Message._createFromServer).toHaveBeenCalledWith(messageObj, messageObj.conversation.id, client);
+            expect(layer.Message._createFromServer).toHaveBeenCalledWith(messageObj, client);
 
             // Restore
             layer.Message._createFromServer = tmp;
+        });
+
+        it("Should call Announcement._createFromServer", function() {
+            // Setup
+            var tmp = layer.Announcement._createFromServer;
+            var announcement = new layer.Announcement({
+               client: client,
+               fromServer: JSON.parse(JSON.stringify(responses.announcement))
+            });
+            delete client._messagesHash[announcement.id];
+            spyOn(layer.Announcement, "_createFromServer").and.returnValue(announcement);
+            var messageObj = JSON.parse(JSON.stringify(responses.announcement));
+
+            // Run
+            var message = client._createObject(messageObj);
+
+            // Posttest
+            expect(message).toBe(announcement);
+            expect(layer.Announcement._createFromServer).toHaveBeenCalledWith(messageObj, client);
+
+            // Restore
+            layer.Announcement._createFromServer = tmp;
         });
 
         it("Should call Conversation._createFromServer", function() {

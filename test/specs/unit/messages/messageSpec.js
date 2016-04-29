@@ -16,7 +16,7 @@ describe("The Message class", function() {
             url: "https://doh.com"
         });
         client.userId = "999";
-        conversation = layer.Conversation._createFromServer(responses.conversation2, client).conversation;
+        conversation = layer.Conversation._createFromServer(responses.conversation2, client);
 
         requests.reset();
         jasmine.clock().tick(1);
@@ -1991,14 +1991,15 @@ describe("The Message class", function() {
 
         it("Should call _populateFromServer if found", function() {
             // Setup
-            var m = conversation.createMessage("Hello").send();
+            var id = conversation.createMessage("Hello").send().id;
 
-            layer.Message._createFromServer({
-                id: m.id,
+            var m = layer.Message._createFromServer({
+                id: id,
                 url: "hey ho",
                 parts: [],
-                sender: {}
-            }, conversation.id, client).message;
+                sender: {},
+                conversation: {id: "layer:///conversations/fred"}
+            }, client);
 
             // Posttest
             expect(m.url).toEqual("hey ho");
@@ -2012,8 +2013,9 @@ describe("The Message class", function() {
                 url: "hey ho",
                 id: "layer:///messages/m103",
                 parts: [],
-                sender: {}
-            }, conversation.id, client).message;
+                sender: {},
+                conversation: {id: "layer:///conversations/fred"}
+            }, client);
 
             // Posttest
             expect(client.getMessage(m.id)).toBe(m);
@@ -2026,8 +2028,8 @@ describe("The Message class", function() {
             var tmp = layer.Message.prototype._sendReceipt;
             spyOn(layer.Message.prototype, "_sendReceipt");
 
-            // Run
-            var m = layer.Message._createFromServer(data, conversation.id, client).message;
+            // Run,
+            var m = layer.Message._createFromServer(data, client);
 
             // Posttest
             expect(layer.Message.prototype._sendReceipt).toHaveBeenCalledWith('delivery');
@@ -2043,8 +2045,8 @@ describe("The Message class", function() {
             var tmp = layer.Message.prototype.recipientStatus;
             spyOn(layer.Message.prototype, "recipientStatus");
 
-            // Run
-            var m = layer.Message._createFromServer(data, conversation.id, client).message;
+            // Run,
+            var m = layer.Message._createFromServer(data, client);
 
             // Posttest
             expect(layer.Message.prototype.recipientStatus).not.toHaveBeenCalledWith('delivery');
@@ -2059,8 +2061,8 @@ describe("The Message class", function() {
             client.getMessage(data.id).destroy();
             spyOn(client, "_triggerAsync");
 
-            // Run
-            var m = layer.Message._createFromServer(data, conversation.id, client).message;
+            // Run,
+            var m = layer.Message._createFromServer(data, client);
 
             // Posttest
             expect(client._triggerAsync).toHaveBeenCalledWith('messages:notify', { message: m });
@@ -2073,8 +2075,8 @@ describe("The Message class", function() {
             client.getMessage(data.id).destroy();
             spyOn(client, "_triggerAsync");
 
-            // Run
-            var m = layer.Message._createFromServer(data, conversation.id, client).message;
+            // Run,
+            var m = layer.Message._createFromServer(data, client);
 
             // Posttest
             expect(client._triggerAsync).not.toHaveBeenCalledWith('messages:notify', { message: m });
@@ -2087,8 +2089,8 @@ describe("The Message class", function() {
             client.getMessage(data.id).destroy();
             spyOn(client, "_triggerAsync");
 
-            // Run
-            var m = layer.Message._createFromServer(data, conversation.id, client).message;
+            // Run,
+            var m = layer.Message._createFromServer(data, client);
 
             // Posttest
             expect(client._triggerAsync).not.toHaveBeenCalledWith('messages:notify', { message: m });
@@ -2099,222 +2101,35 @@ describe("The Message class", function() {
             client.getMessage(data.id).destroy();
             spyOn(client, "_triggerAsync");
 
-            // Run
-            var m = layer.Message._createFromServer(data, conversation.id, client).message;
+            // Run,
+            var m = layer.Message._createFromServer(data, client);
 
             // Posttest
             expect(client._triggerAsync).not.toHaveBeenCalledWith('messages:notify', { message: m });
         });
     });
 
-    describe("The load() method", function() {
+    describe("The _loaded() method", function() {
+      var message;
+      beforeEach(function() {
+          message = conversation.createMessage("hello");
+      });
 
-        it("Should fail without a client", function() {
-            // Run
-            expect(function() {
-                layer.Message.load("https://foo", "argh");
-            }).toThrowError(layer.LayerError.dictionary.clientMissing);
-        });
+      afterEach(function() {
+          if (!message.isDestroyed) message.destroy();
+      });
 
+      it("Should setup the Conversation ID", function() {
+        message.conversationId = '';
+        message._loaded(responses.message1);
+        expect(message.conversationId).toEqual(responses.message1.conversation.id);
+      });
 
-        it("Should fail without a valid id", function() {
-            // Run
-            expect(function() {
-                layer.Message.load("layyer:///messages/m1", client);
-            }).toThrowError(layer.LayerError.dictionary.invalidId);
-        });
-
-        it("Should return a message instance with id/url", function() {
-            // Run
-
-            var id = "layer:///messages/m1"
-            var m = layer.Message.load(id, client);
-
-            // Posttest
-            expect(m.url).toEqual(client.url + "/messages/m1");
-            expect(m.id).toEqual(id);
-            expect(m).toEqual(jasmine.any(layer.Message));
-        });
-
-        it("Should call client.xhr", function() {
-            // Run
-            spyOn(client, "xhr");
-            var id = "layer:///messages/m1";
-            var m = layer.Message.load(id, client);
-
-            // Posttest
-            expect(client.xhr).toHaveBeenCalledWith({
-                url: client.url + "/messages/m1",
-                method: "GET",
-                sync: false
-            }, jasmine.any(Function));
-        });
-
-        it("Should have syncState of LOADING", function() {
-            // Run
-            var id = "layer:///messages/m1"
-            var m = layer.Message.load(id, client);
-
-            // Posttest
-            expect(m.syncState).toEqual(layer.Constants.SYNC_STATE.LOADING);
-        });
-
-        it("Should set the isLoading property", function() {
-          var m = layer.Message.load(responses.message1.id, client);
-          expect(m.isLoading).toBe(true);
-        })
-    });
-
-    describe("The _loadResult() method", function() {
-        var m;
-        beforeEach(function() {
-            m = new layer.Message({
-                client: client
-            });
-        });
-        afterEach(function() {
-            m.destroy();
-        });
-
-        it("Should trigger messages:loaded-error on error", function() {
-            // Setup
-            spyOn(m, "_triggerAsync");
-
-            // Run
-            layer.Message._loadResult(m, client, {success: false, data: {hey: "ho"}});
-
-            // Posttest
-            expect(m._triggerAsync).toHaveBeenCalledWith(
-                "messages:loaded-error", {error: {hey: "ho"}}
-            );
-        });
-
-        it("Should call _loadSuccess if successful", function() {
-            // Setup
-            var _loadSuccess = layer.Message._loadSuccess;
-            spyOn(layer.Message, "_loadSuccess");
-
-            // Run
-            layer.Message._loadResult(m, client, {success: true, data: {hey: "ho"}});
-
-            // Posttest
-            expect(layer.Message._loadSuccess).toHaveBeenCalledWith(m, client, {hey: "ho"});
-
-            layer.Message._loadSuccess = _loadSuccess;
-        });
-
-        it("Should clear the isLoading property on success", function() {
-            var m = layer.Message.load(responses.message1.id, client);
-            expect(m.isLoading).toBe(true);
-
-            // Run
-            layer.Message._loadResult(m, client, {
-                success: true,
-                data: JSON.parse(JSON.stringify(responses.message1))
-            });
-            expect(m.isLoading).toBe(false);
-        });
-
-        it("Should clear the isLoading property on error", function() {
-            var m = layer.Message.load(responses.message1.id, client);
-            expect(m.isLoading).toBe(true);
-
-            // Run
-            layer.Message._loadResult(m, client, {
-                success: false,
-                data: {}
-            });
-            expect(m.isLoading).toBe(false);
-        });
-
-        it("Should schedule destroy", function() {
-            var m = layer.Message.load(responses.message1.id, client);
-
-            // Run
-            layer.Message._loadResult(m, client, {
-                success: false,
-                data: {}
-            });
-
-            // Posttest1
-            expect(m.isDestroyed).toBe(false);
-
-            // Posttest2
-            jasmine.clock().tick(101);
-            expect(m.isDestroyed).toBe(true);
-
-        });
-    });
-
-    describe("The _loadSuccess() method", function() {
-        var m;
-        beforeEach(function() {
-            m = new layer.Message({
-                client: client
-            });
-        });
-        afterEach(function() {
-            m.destroy();
-        });
-
-        it("Should call _populateFromServer on the message", function() {
-            // Setup
-            spyOn(m, "_populateFromServer");
-
-            // Run
-            layer.Message._loadSuccess(m, client, responses.message1);
-
-            // Posttest
-            expect(m._populateFromServer).toHaveBeenCalledWith(responses.message1);
-        });
-
-        it("Should set the conversation if found", function() {
-            // Setup
-            var data = JSON.parse(JSON.stringify(responses.message1));
-            data.conversation.id = responses.conversation2.id;
-            var c = client.getConversation(responses.conversation2.id, false);
-
-            // Run
-            layer.Message._loadSuccess(m, client, data);
-
-            // Posttest
-            expect(m.conversationId).toEqual(c.id);
-            expect(m.getConversation()).toBe(c);
-        });
-
-        it("Should set the conversation if NOT found", function() {
-            // Setup
-            var data = JSON.parse(JSON.stringify(responses.message1));
-            data.conversation.id = responses.conversation2.id + 1;
-            var c = client.getConversation(data.conversation.id, false);
-
-            // Pretest
-            expect(c).toBe(undefined);
-
-            // Run
-            layer.Message._loadSuccess(m, client, data);
-
-            // Posttest
-            expect(m.getConversation()).toBe(undefined);
-            expect(m.conversationId).toEqual(data.conversation.id);
-        });
-
-        it("Should call messages:loaded", function() {
-            // Setup
-            var data = JSON.parse(JSON.stringify(responses.message1));
-            data.conversation.id = responses.conversation2.id;
-            var c = client.getConversation(responses.conversation2.id, false);
-            c.lastMessage.destroy();
-            var called = false;
-            spyOn(m, "_triggerAsync");
-
-            // Run
-            layer.Message._loadSuccess(m, client, data);
-
-            // Posttest
-            expect(m._triggerAsync).toHaveBeenCalledWith("messages:loaded");
-        });
-
+      it("Should register the Message", function() {
+        spyOn(client, "_addMessage");
+        message._loaded(responses.message1);
+        expect(client._addMessage).toHaveBeenCalledWith(message);
+      });
     });
 
     describe("The _setSynced() method", function() {

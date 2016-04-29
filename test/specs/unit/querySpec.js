@@ -4,6 +4,7 @@ describe("The Query Class", function() {
 
     var conversation, conversationUUID,
         conversation2,
+        announcement,
         message,
         client,
         requests;
@@ -20,8 +21,9 @@ describe("The Query Class", function() {
         client.userId = "Frodo";
         client._clientReady();
 
-        conversation = client._createObject(responses.conversation1).conversation;
-        conversation2 = client._createObject(responses.conversation2).conversation;
+        conversation = client._createObject(responses.conversation1);
+        announcement = client._createObject(responses.announcement);
+        conversation2 = client._createObject(responses.conversation2);
         message = conversation.createMessage("Hey");
         requests.reset();
         client.syncManager.queue = [];
@@ -370,9 +372,10 @@ describe("The Query Class", function() {
         it("Should call _runConversation if the model is Conversation", function() {
             spyOn(query, "_runConversation");
             spyOn(query, "_runMessage");
+            spyOn(query, "_runAnnouncement");
             spyOn(client, "_checkAndPurgeCache");
             spyOn(query, "trigger");
-            query.data = [message];
+            query.data = [conversation];
 
             // Run
             query._run();
@@ -381,6 +384,7 @@ describe("The Query Class", function() {
             expect(client._checkAndPurgeCache).not.toHaveBeenCalled();
             expect(query._runConversation).toHaveBeenCalledWith(14);
             expect(query._runMessage).not.toHaveBeenCalled();
+            expect(query._runAnnouncement).not.toHaveBeenCalled();
             expect(query.trigger).not.toHaveBeenCalled();
         });
 
@@ -389,6 +393,7 @@ describe("The Query Class", function() {
             query.predicate = 'conversation.id = "fred"';
             spyOn(query, "_runConversation");
             spyOn(query, "_runMessage");
+            spyOn(query, "_runAnnouncement");
             spyOn(client, "_checkAndPurgeCache");
             spyOn(query, "trigger");
             query.data = [message];
@@ -399,9 +404,31 @@ describe("The Query Class", function() {
             // Posttest
             expect(client._checkAndPurgeCache).not.toHaveBeenCalled();
             expect(query._runMessage).toHaveBeenCalledWith(14);
+            expect(query._runAnnouncement).not.toHaveBeenCalled();
             expect(query._runConversation).not.toHaveBeenCalled();
             expect(query.trigger).not.toHaveBeenCalled();
         });
+
+        it("Should call _runAnnouncement if the model is Announcement", function() {
+            query.model = layer.Query.Announcement;
+            spyOn(query, "_runConversation");
+            spyOn(query, "_runMessage");
+            spyOn(query, "_runAnnouncement");
+            spyOn(client, "_checkAndPurgeCache");
+            spyOn(query, "trigger");
+            query.data = [announcement];
+
+            // Run
+            query._run();
+
+            // Posttest
+            expect(client._checkAndPurgeCache).not.toHaveBeenCalled();
+            expect(query._runMessage).not.toHaveBeenCalled()
+            expect(query._runAnnouncement).toHaveBeenCalledWith(14);
+            expect(query._runConversation).not.toHaveBeenCalled();
+            expect(query.trigger).not.toHaveBeenCalled();
+        });
+
 
         it("Should do nothing if there are no more results requested", function() {
             for (var i = 0; i < 50; i++) query.data.push(message);
@@ -549,6 +576,83 @@ describe("The Query Class", function() {
         });
     });
 
+    describe("The _runAnnouncement() method", function() {
+        var query;
+        beforeEach(function() {
+            var tmp = layer.Query.prototype._run;
+            layer.Query.prototype._run = function() {}
+            query = new layer.Query({
+                client: client,
+                model: layer.Query.Announcement,
+                paginationWindow: 15
+            });
+            layer.Query.prototype._run = tmp;
+        });
+
+        afterEach(function() {
+            query.destroy();
+        });
+
+        it("Should set isFiring to true", function() {
+            query.isFiring = false;
+            query._runAnnouncement(37);
+            expect(query.isFiring).toBe(true);
+        });
+
+        it("Should call dbManager.loadAnnouncements if its a new query", function() {
+          query._reset();
+          spyOn(client.dbManager, "loadAnnouncements");
+          query._runAnnouncement(140);
+          expect(client.dbManager.loadAnnouncements).toHaveBeenCalled();
+        });
+
+        it("Should clear isReset", function() {
+          query._reset();
+          query._runAnnouncement(141);
+          expect(query.isReset).toBe(false);
+        });
+
+        it("Should skip call dbManager.loadAnnouncements if its not a new query", function() {
+          query._reset();
+          query._runAnnouncement(100);
+          spyOn(client.dbManager, "loadAnnouncements");
+          query._runAnnouncement(142);
+          expect(client.dbManager.loadAnnouncements).not.toHaveBeenCalled();
+        });
+
+        it("Should call without from_id", function() {
+            query._runAnnouncement(41);
+            expect(requests.mostRecent().url).toEqual(client.url  + "/announcements?page_size=41");
+        });
+
+        it("Should call with from_id", function() {
+            query.data = [announcement];
+            query._runAnnouncement(44);
+            expect(requests.mostRecent().url).toEqual(client.url  + "/announcements?page_size=44&from_id=" + announcement.id);
+        });
+
+        it("Should refuse to call if already firing with same url", function() {
+            query.data = [];
+            query._runAnnouncement(45);
+            query._runAnnouncement(45);
+            expect(requests.count()).toEqual(1);
+        });
+
+
+        it("Should call _processRunResults", function() {
+            spyOn(query, "_processRunResults");
+            query._runAnnouncement(47);
+            requests.mostRecent().response({
+                status: 200,
+                responseText: JSON.stringify([{id: "a"}, {id: "b"}])
+            });
+            expect(query._processRunResults).toHaveBeenCalledWith(jasmine.objectContaining({
+                success: true,
+                data: [{id: "a"}, {id: "b"}]
+            }), "announcements?page_size=47");
+        });
+    });
+
     describe("The _runMessage() method", function() {
         var query;
         beforeEach(function() {
@@ -617,7 +721,7 @@ describe("The Query Class", function() {
 
         it("Should skip call dbManager.loadMessages if its not a new query", function() {
           query._reset();
-          query._runConversation();
+          query._runMessage(100);
           spyOn(client.dbManager, "loadMessages");
           query._runMessage(142);
           expect(client.dbManager.loadMessages).not.toHaveBeenCalled();

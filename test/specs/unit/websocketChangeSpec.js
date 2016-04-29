@@ -14,7 +14,7 @@ describe("The Websocket Change Manager Class", function() {
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
         changeManager = client.socketChangeManager;
-        conversation = client._createObject(responses.conversation1).conversation;
+        conversation = client._createObject(responses.conversation1);
         requests.reset();
     });
 
@@ -178,7 +178,7 @@ describe("The Websocket Change Manager Class", function() {
 
     describe("The _handleDelete() method", function() {
         it("Should call object._deleted and object.destroy if found", function() {
-            var m = conversation.createMessage("hey");
+            var m = conversation.createMessage("hey").send();
             spyOn(changeManager, "_getObject").and.returnValue(m);
             spyOn(m, "_deleted");
             spyOn(m, "destroy");
@@ -186,7 +186,7 @@ describe("The Websocket Change Manager Class", function() {
             // Run
             changeManager._handleDelete({
                 object: {
-                    id: "fred"
+                  id: conversation.id
                 },
                 data: {
                   mode: "all_participants"
@@ -199,7 +199,7 @@ describe("The Websocket Change Manager Class", function() {
         });
 
         it("Should do nothing if the object is not found", function() {
-            var m = conversation.createMessage("hey");
+            var m = conversation.createMessage("hey").send();
             spyOn(changeManager, "_getObject").and.returnValue(null);
             spyOn(m, "_deleted");
             spyOn(m, "destroy");
@@ -207,7 +207,7 @@ describe("The Websocket Change Manager Class", function() {
             // Run
             changeManager._handleDelete({
                 object: {
-                    id: "fred"
+                  id: conversation.id
                 },
                 data: {
                   mode: "my_devices"
@@ -220,10 +220,13 @@ describe("The Websocket Change Manager Class", function() {
         });
 
         it("Should not destroy the object if from_position has a value", function() {
+          var m = conversation.createMessage("hey").send();
+          m.position = 6;
+
           // Run
           changeManager._handleDelete({
               object: {
-                  id: "fred"
+                  id: conversation.id
               },
               data: {
                 mode: 'my_devices',
@@ -235,13 +238,14 @@ describe("The Websocket Change Manager Class", function() {
           expect(m.isDestroyed).toBe(false);
         });
 
-        it("Should call client._purgeMessagesByPosition if from_position has a value", function() {
-          spyOn(client, "_purgeMessagesByPosition");
+        it("Should destroy the object if from_position has a value", function() {
+          var m = conversation.createMessage("hey").send();
+          m.position = 4;
 
           // Run
           changeManager._handleDelete({
               object: {
-                  id: "fred"
+                  id: conversation.id
               },
               data: {
                 mode: 'my_devices',
@@ -250,7 +254,25 @@ describe("The Websocket Change Manager Class", function() {
           });
 
           // Posttest
-          expect(client._purgeMessagesByPosition).toHaveBeenCalledWith("fred", 5);
+          expect(m.isDestroyed).toBe(true);
+        });
+
+        it("Should call client._purgeMessagesByPosition if from_position has a value", function() {
+          spyOn(client, "_purgeMessagesByPosition");
+
+          // Run
+          changeManager._handleDelete({
+              object: {
+                  id: conversation.id
+              },
+              data: {
+                mode: 'my_devices',
+                from_position: 5
+              }
+          });
+
+          // Posttest
+          expect(client._purgeMessagesByPosition).toHaveBeenCalledWith(conversation.id, 5);
         });
     });
 

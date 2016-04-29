@@ -26,6 +26,9 @@
   * layer.Message.getConversation now supports a boolean parameter to load from server if Conversation is not cached.
 * Persistence
   * Conversations, Messages, Identities and unfinishedServer Requests can now be persisted between sessions.  See layer.Client.persistenceFeatures for more detail.
+* layer.Announcement
+  * Introduces the layer.Announcement class
+  * Introduces the ability to create Queries to receive Announcements
 
 #### Bug Fixes
 
@@ -37,6 +40,7 @@
 ## 1.0.1
 
 * Adds isTrustedDevice property to layer.Client which defaults to false. If this is false, session tokens will NOT be written to localStorage, and will not be restored next time the page reloads.
+  * Support for Deletion with either layer.Constants.DELETION_MODE.MY_DEVICES or .Constants.DELETION_MODE.ALL (delete for all users or just for me).  Note that deleting for just me doesn't remove me as a participant, which means that new Messages will cause the Conversation to reappear.
 
 ## 1.0.0
 

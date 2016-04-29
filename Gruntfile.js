@@ -117,6 +117,7 @@ module.exports = function (grunt) {
           "lib/conversation.js": "src/conversation.js",
           "lib/message-part.js": "src/message-part.js",
           "lib/message.js": "src/message.js",
+          "lib/announcement.js": "src/announcement.js",
           "lib/content.js": "src/content.js",
           "lib/query.js": "src/query.js",
           "lib/query-builder.js": "src/query-builder.js",

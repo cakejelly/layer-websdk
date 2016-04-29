@@ -27,7 +27,7 @@ describe("The Typing Indicator Classes", function() {
 
         var convData = JSON.parse(JSON.stringify(responses.conversation1));
         convData.id = convId;
-        conversation = client._createObject(convData).conversation;
+        conversation = client._createObject(convData);
 
         requests.reset();
         client.syncManager.queue = [];

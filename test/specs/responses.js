@@ -105,7 +105,29 @@ responses = {
         "distinct": false
     },
     message1: sampleMessage2,
-    message2: sampleMessage3
+    message2: sampleMessage3,
+    announcement: {
+       "id": "layer:///announcements/b40de862-3c96-11e4-baad-164230d1df67",
+      "url": "https://doh.com/announcements/b40de862-3c96-11e4-baad-164230d1df67",
+      "position": 15032697020,
+      "parts": [
+          {
+              "id": "layer:///announcements/b40de862-3c96-11e4-baad-164230d1df67/parts/0",
+              "mime_type": "text/plain",
+              "body": "This is the message.",
+              "size": 20
+          }
+      ],
+      "sent_at": "2014-09-09T04:44:47+00:00",
+      "sender": {
+          "name": "Hey ho"
+      },
+      "is_unread": true,
+      "recipient_status": {
+          "777": "sent"
+      }
+
+    }
 };
 
 var mostRecentEqualityTest =  function(a, b) {

@@ -82,7 +82,9 @@ const ClientAuth = require('./client-authenticator');
 const Conversation = require('./conversation');
 const Query = require('./query');
 const LayerError = require('./layer-error');
+const Syncable = require('./syncable');
 const Message = require('./message');
+const Announcement = require('./announcement');
 const User = require('./user');
 const TypingIndicatorListener = require('./typing-indicators/typing-indicator-listener');
 const Util = require('./client-utils');
@@ -315,7 +317,7 @@ class Client extends ClientAuth {
 
 
   /**
-   * Retrieve the message by message id.
+   * Retrieve the message or announcement id.
    *
    * Useful for finding a message when you have only the ID.
    *
@@ -346,7 +348,7 @@ class Client extends ClientAuth {
     if (this._messagesHash[id]) {
       return this._messagesHash[id];
     } else if (canLoad) {
-      return Message.load(id, this);
+      return Syncable.load(id, this);
     }
   }
 
@@ -438,22 +440,6 @@ class Client extends ClientAuth {
   }
 
   /**
-   * If the Message ID changes, we need to reregister the message
-   *
-   * @method _updateMessageId
-   * @protected
-   * @param  {layer.Message} message - message whose ID has changed
-   * @param  {string} oldId - Previous ID
-   */
-  _updateMessageId(message, oldId) {
-    this._messagesHash[message.id] = message;
-    delete this._messagesHash[oldId];
-
-    // Enable components that still have the old ID to still call getMessage with it
-    this._tempMessagesHash[oldId] = message.id;
-  }
-
-  /**
    * Takes as input an object id, and either calls getConversation() or getMessage() as needed.
    *
    * Will only get cached objects, will not get objects from the server.
@@ -470,6 +456,7 @@ class Client extends ClientAuth {
   _getObject(id) {
     switch (Util.typeFromID(id)) {
       case 'messages':
+      case 'announcements':
         return this.getMessage(id);
       case 'conversations':
         return this.getConversation(id);
@@ -488,13 +475,21 @@ class Client extends ClientAuth {
    * @param  {Object} obj - Plain javascript object representing a Message or Conversation
    */
   _createObject(obj) {
-    switch (Util.typeFromID(obj.id)) {
-      case 'messages': {
-        return Message._createFromServer(obj, obj.conversation.id, this);
-      }
+    const item = this._getObject(obj.id);
+    if (item) {
+      item._populateFromServer(obj);
+      return item;
+    } else {
+      // TODO: Factory method in Syncable class?
+      switch (Util.typeFromID(obj.id)) {
+        case 'messages':
+          return Message._createFromServer(obj, this);
 
-      case 'conversations': {
-        return Conversation._createFromServer(obj, this);
+        case 'announcements':
+          return Announcement._createFromServer(obj, this);
+
+        case 'conversations':
+          return Conversation._createFromServer(obj, this);
       }
     }
   }
@@ -1237,6 +1232,15 @@ Client._supportedEvents = [
   'conversations:change',
 
   /**
+   * A call to layer.Conversation.load has completed successfully
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.Conversation} evt.target
+   */
+  'conversations:loaded',
+
+  /**
    * A new message has been received for which a notification may be suitable.
    * This event is triggered for messages that are:
    *
@@ -1374,6 +1378,15 @@ Client._supportedEvents = [
    * @param {layer.Message} evt.target
    */
   'messages:read',
+
+  /**
+   * A call to layer.Message.load has completed successfully
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.Message} evt.target
+   */
+  'messages:loaded',
 
   /**
    * A Conversation has been deleted from the server.

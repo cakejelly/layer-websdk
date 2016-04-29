@@ -26,7 +26,7 @@ describe("The MessageParts class", function() {
             url: "https://doh.com"
         });
         client.userId = "999";
-        conversation = layer.Conversation._createFromServer(responses.conversation2, client).conversation;
+        conversation = layer.Conversation._createFromServer(responses.conversation2, client);
         conversation.lastMessage.destroy();
         requests.reset();
         client._clientReady();

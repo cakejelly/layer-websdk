@@ -384,7 +384,7 @@ class Conversation extends Syncable {
 
 
     if (conversation.last_message) {
-      this.lastMessage = Message._createFromServer(conversation.last_message, this.id, client).message;
+      this.lastMessage = client._createObject(conversation.last_message);
     } else {
       this.lastMessage = null;
     }
@@ -914,41 +914,8 @@ class Conversation extends Syncable {
     return this.url + (url || '');
   }
 
-  /**
-   * Load this conversation from the server.
-   *
-   * Called from the static layer.Conversation.load() method
-   *
-   * @method _load
-   * @private
-   */
-  _load() {
-    this.syncState = Constants.SYNC_STATE.LOADING;
-    this._xhr({
-      url: '',
-      method: 'GET',
-      sync: false,
-    }, result => this._loadResult(result));
-  }
-
-  /**
-   * Processing the result of a _load() call.
-   *
-   * @method _loadResult
-   * @private
-   * @param  {Object} result - Response from server
-   */
-  _loadResult(result) {
-    if (!result.success) {
-      this.syncState = Constants.SYNC_STATE.NEW;
-      this.trigger('conversations:loaded-error', { error: result.data });
-      if (!this.isDestroyed) this.destroy();
-    } else {
-      // If successful, copy the properties into this object
-      this._populateFromServer(result.data);
-      this.getClient()._addConversation(this);
-      this.trigger('conversations:loaded');
-    }
+  _loaded(data) {
+    this.getClient()._addConversation(this);
   }
 
   /**
@@ -1138,7 +1105,6 @@ class Conversation extends Syncable {
     super.trigger(evtName, args);
   }
 
-
   /**
    * Create a conversation instance from a server representation of the conversation.
    *
@@ -1153,57 +1119,12 @@ class Conversation extends Syncable {
    * @return {layer.Conversation}        [description]
    */
   static _createFromServer(conversation, client) {
-    let newConversation;
-
-    // Make sure we have a client... or abort
-    if (!(client instanceof Root)) throw new Error(LayerError.dictionary.clientMissing);
-
     // If the Conversation already exists in cache, update the cache
-    const found = client.getConversation(conversation.id);
-    if (found) {
-      newConversation = found;
-      newConversation._populateFromServer(conversation);
-    } else {
-      // If the Conversation does not exist, create it; side effects will cache it
-      newConversation = new Conversation({
-        client,
-        fromServer: conversation,
-        _fromDB: conversation._fromDB,
-      });
-    }
-
-    // Return Conversation and whether it was new/cached
-    return {
-      conversation: newConversation,
-      new: !found,
-    };
-  }
-
-  /**
-   * Load a conversation from the server by Id.
-   *
-   * Typically one should call
-   *
-   *     client.getConversation(conversationId, true)
-   *
-   * This will get the Conversation from cache or layer.Conversation.load it from the server if not cached.
-   * Typically you do not need to call this method directly.
-   *
-   * @method load
-   * @static
-   * @param  {string} id - Conversation Identifier
-   * @param  {layer.Client} client - The Layer client
-   * @return {layer.Conversation}
-   */
-  static load(id, client) {
-    if (!client) throw new Error(LayerError.dictionary.clientMissing);
-    const conversation = new Conversation({
-      url: client.url + id.substring(8),
-      id,
+    return new Conversation({
       client,
+      fromServer: conversation,
+      _fromDB: conversation._fromDB,
     });
-    conversation._load();
-    return conversation;
   }
 
   /**
@@ -1408,6 +1329,8 @@ Conversation.prototype.lastMessage = null;
  */
 Conversation.prototype._toObject = null;
 
+Conversation.eventPrefix = 'conversations';
+
 /**
  * Cache's a Distinct Event.
  *
@@ -1550,5 +1473,5 @@ Conversation._supportedEvents = [
   'conversations:change'].concat(Syncable._supportedEvents);
 
 Root.initClass.apply(Conversation, [Conversation, 'Conversation']);
-
+Syncable.subclasses.push(Conversation);
 module.exports = Conversation;

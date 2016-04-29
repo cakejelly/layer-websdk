@@ -269,7 +269,7 @@ class DbManager extends Root {
       recipient_status: message.recipientStatus,
       sent_at: getDate(message.sentAt),
       received_at: getDate(message.receivedAt),
-      conversation: message.conversationId,
+      conversation: message.constructor.prefixUUID === 'layer:///announcements/' ? 'announcement' : message.conversationId,
       sync_state: message.syncState,
     }));
   }
@@ -452,6 +452,19 @@ class DbManager extends Root {
   }
 
   /**
+   * Load all Announcements from the database.
+   *
+   * @method loadAnnouncements
+   * @param {Function} callback
+   * @param {layer.Announcement[]} callback.result
+   */
+  loadAnnouncements(callback) {
+    this._loadByIndex('messages', 'conversation', 'announcement', data => {
+      this._loadMessagesResult(data, callback);
+    });
+  }
+
+  /**
    * Registers and sorts the message objects from the database.
    *
    * TODO: Encode limits on this, else we are sorting tens of thousands
@@ -498,10 +511,10 @@ class DbManager extends Root {
       conversation._fromDB = true;
       const lastMessage = conversation.last_message;
       conversation.last_message = '';
-      const result = this.client._createObject(conversation);
-      result.conversation.syncState = conversation.sync_state;
-      result.conversation.lastMessage = this.client.getMessage(lastMessage) || null;
-      return result.conversation;
+      const newConversation = this.client._createObject(conversation);
+      newConversation.syncState = conversation.sync_state;
+      newConversation.lastMessage = this.client.getMessage(lastMessage) || null;
+      return newConversation;
     }
   }
 
@@ -519,9 +532,9 @@ class DbManager extends Root {
     if (!this.client.getMessage(message.id)) {
       message._fromDB = true;
       message.conversation = { id: message.conversation };
-      const result = this.client._createObject(message);
-      result.message.syncState = message.sync_state;
-      return result.message;
+      const newMessage = this.client._createObject(message);
+      newMessage.syncState = message.sync_state;
+      return newMessage;
     }
   }
 
@@ -586,7 +599,10 @@ class DbManager extends Root {
     // If the target is present in the sync event, but does not exist in the system,
     // do NOT attempt to instantiate this event... unless its a DELETE operation.
     const newData = syncEvents
-    .filter(syncEvent => !syncEvent.target || syncEvent.operation === 'DELETE' || this.client._getObject(syncEvent.target))
+    .filter(syncEvent => {
+      const hasTarget = Boolean(syncEvent.target && this.client._getObject(syncEvent.target));
+      return syncEvent.operation === 'DELETE' || hasTarget;
+    })
     .map(syncEvent => {
       if (syncEvent.isWebsocket) {
         return new SyncEvent.WebsocketSyncEvent({

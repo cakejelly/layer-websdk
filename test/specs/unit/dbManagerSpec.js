@@ -1,5 +1,4 @@
 /*eslint-disable */
-console.log("THE DBMANAGER CLASS");
 describe("The DbManager Class", function() {
     var appId = "Fred's App";
 
@@ -18,7 +17,7 @@ describe("The DbManager Class", function() {
         client.userId = "Frodo";
         client._clientReady();
         client.syncManager.queue = [];
-        conversation = client._createObject(responses.conversation1).conversation;
+        conversation = client._createObject(responses.conversation1);
         message = conversation.lastMessage;
         dbManager = client.dbManager;
         dbManager.deleteTables(function() {
@@ -272,7 +271,7 @@ describe("The DbManager Class", function() {
         expect(dbManager._getMessageData([message])).toEqual([]);
       });
 
-      it("Should generate a proper object", function() {
+      it("Should generate a proper Message object", function() {
         message = conversation.createMessage("hey ho");
         message.receivedAt = new Date();
         expect(dbManager._getMessageData([message])).toEqual([{
@@ -286,6 +285,32 @@ describe("The DbManager Class", function() {
           sender: {
             user_id: message.sender.user_id || '',
             name: ''
+          },
+          sync_state: message.syncState,
+          parts: [{
+            id: message.parts[0].id,
+            body: message.parts[0].body,
+            encoding: message.parts[0].encoding,
+            mime_type: message.parts[0].mimeType,
+            content: null
+          }]
+        }]);
+      });
+
+      it("Should generate a proper Announcement object", function() {
+        message = client._createObject(JSON.parse(JSON.stringify(responses.announcement)));
+        message.receivedAt = new Date();
+        expect(dbManager._getMessageData([message])).toEqual([{
+          id: message.id,
+          url: message.url,
+          position: message.position,
+          recipient_status: message.recipientStatus,
+          sent_at: message.sentAt.toISOString(),
+          received_at: message.receivedAt.toISOString(),
+          conversation: 'announcement',
+          sender: {
+            user_id: '',
+            name: 'Hey ho'
           },
           sync_state: message.syncState,
           parts: [{
@@ -657,6 +682,24 @@ describe("The DbManager Class", function() {
         });
         var spy = jasmine.createSpy('spy');
         dbManager.loadMessages(conversation.id, spy);
+        expect(dbManager._loadMessagesResult).toHaveBeenCalledWith([message], spy);
+      });
+    });
+
+    describe("The loadAnnouncements() method", function() {
+      it("Should call _loadByIndex", function() {
+        spyOn(dbManager, "_loadByIndex");
+        dbManager.loadAnnouncements();
+        expect(dbManager._loadByIndex).toHaveBeenCalledWith('messages', 'conversation', 'announcement', jasmine.any(Function));
+      });
+
+      it("Should call _loadMessagesResult", function() {
+        spyOn(dbManager, "_loadMessagesResult");
+        spyOn(dbManager, "_loadByIndex").and.callFake(function(table, index, id, callback) {
+          callback([message]);
+        });
+        var spy = jasmine.createSpy('spy');
+        dbManager.loadAnnouncements(spy);
         expect(dbManager._loadMessagesResult).toHaveBeenCalledWith([message], spy);
       });
     });

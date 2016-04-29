@@ -19,9 +19,70 @@
  */
 
 const Root = require('./root');
-const Constants = require('./const');
+const { SYNC_STATE } = require('./const');
+const LayerError = require('./layer-error');
 
 class Syncable extends Root {
+
+  static load(id, client) {
+    if (!client || !(client instanceof Root)) throw new Error(LayerError.dictionary.clientMissing);
+
+    const obj = {
+      id,
+      url: client.url + id.substring(8),
+      clientId: client.appId,
+    };
+
+    const ConstructorClass = Syncable.subclasses.filter(aClass => obj.id.indexOf(aClass.prefixUUID) === 0)[0];
+    const syncItem = new ConstructorClass(obj);
+
+    syncItem._load();
+    return syncItem;
+  }
+
+  /**
+   * Load this conversation from the server.
+   *
+   * Called from the static layer.Conversation.load() method
+   *
+   * @method _load
+   * @private
+   */
+  _load() {
+    this.syncState = SYNC_STATE.LOADING;
+    this._xhr({
+      url: '',
+      method: 'GET',
+      sync: false,
+    }, result => this._loadResult(result));
+  }
+
+
+  _loadResult(result) {
+    const prefix = this.constructor.eventPrefix;
+    if (!result.success) {
+      this.syncState = SYNC_STATE.NEW;
+      this._triggerAsync(prefix + ':loaded-error', { error: result.data });
+      setTimeout(() => this.destroy(), 100); // Insure destroyed AFTER loaded-error event has triggered
+    } else {
+      this._populateFromServer(result.data);
+      this._loaded(result.data);
+      this.trigger(prefix + ':loaded');
+    }
+  }
+
+  /**
+   * Processing the result of a _load() call.
+   *
+   * Typically used to register the object and cleanup any properties not handled by _populateFromServer.
+   *
+   * @method _loaded
+   * @private
+   * @param  {Object} data - Response data from server
+   */
+  _loaded(data) {
+
+  }
 
   /**
    * Object is queued for syncing with the server.
@@ -34,11 +95,11 @@ class Syncable extends Root {
   _setSyncing() {
     this._clearObject();
     switch (this.syncState) {
-      case Constants.SYNC_STATE.SYNCED:
-        this.syncState = Constants.SYNC_STATE.SYNCING;
+      case SYNC_STATE.SYNCED:
+        this.syncState = SYNC_STATE.SYNCING;
         break;
-      case Constants.SYNC_STATE.NEW:
-        this.syncState = Constants.SYNC_STATE.SAVING;
+      case SYNC_STATE.NEW:
+        this.syncState = SYNC_STATE.SAVING;
         break;
     }
     this._syncCounter++;
@@ -54,8 +115,8 @@ class Syncable extends Root {
     this._clearObject();
     if (this._syncCounter > 0) this._syncCounter--;
 
-    this.syncState = this._syncCounter === 0 ? Constants.SYNC_STATE.SYNCED :
-                          Constants.SYNC_STATE.SYNCING;
+    this.syncState = this._syncCounter === 0 ? SYNC_STATE.SYNCED :
+                          SYNC_STATE.SYNCING;
     this.isSending = false;
   }
 
@@ -76,7 +137,7 @@ class Syncable extends Root {
    * @returns {boolean}
    */
   isNew() {
-    return this.syncState === Constants.SYNC_STATE.NEW;
+    return this.syncState === SYNC_STATE.NEW;
   }
 
   /**
@@ -86,7 +147,7 @@ class Syncable extends Root {
    * @returns {boolean}
    */
   isSaving() {
-    return this.syncState === Constants.SYNC_STATE.SAVING;
+    return this.syncState === SYNC_STATE.SAVING;
   }
 
   /**
@@ -108,7 +169,7 @@ class Syncable extends Root {
    * @returns {boolean}
    */
   isSynced() {
-    return this.syncState === Constants.SYNC_STATE.SYNCED;
+    return this.syncState === SYNC_STATE.SYNCED;
   }
 }
 
@@ -118,7 +179,7 @@ class Syncable extends Root {
  *
  * Possible values are:
  *
- *  * layer.Constants.SYNC_STATE.NEW: Newly created; local only.
+ *  * layer.SYNC_STATE.NEW: Newly created; local only.
  *  * layer.Constants.SYNC_STATE.SAVING: Newly created; being sent to the server
  *  * layer.Constants.SYNC_STATE.SYNCING: Exists on both client and server, but changes are being sent to server.
  *  * layer.Constants.SYNC_STATE.SYNCED: Exists on both client and server and is synced.
@@ -130,7 +191,7 @@ class Syncable extends Root {
  *
  * @type {string}
  */
-Syncable.prototype.syncState = Constants.SYNC_STATE.NEW;
+Syncable.prototype.syncState = SYNC_STATE.NEW;
 
 /**
  * Number of sync requests that have been requested.
@@ -144,6 +205,11 @@ Syncable.prototype.syncState = Constants.SYNC_STATE.NEW;
 Syncable.prototype._syncCounter = 0;
 
 /**
+ * Prefix to use when triggering events
+ */
+Syncable.eventPrefix = '';
+
+/**
  * Is the object loading from the server?
  *
  * @type {boolean}
@@ -151,9 +217,17 @@ Syncable.prototype._syncCounter = 0;
 Object.defineProperty(Syncable.prototype, 'isLoading', {
   enumerable: true,
   get: function get() {
-    return this.syncState === Constants.SYNC_STATE.LOADING;
+    return this.syncState === SYNC_STATE.LOADING;
   },
 });
+
+/**
+ * Array of classes that are subclasses of Syncable.
+ *
+ * Used by Factory function.
+ * @private
+ */
+Syncable.subclasses = [];
 
 Syncable._supportedEvents = [].concat(Root._supportedEvents);
 Syncable.inObjectIgnore = Root.inObjectIgnore;
