@@ -743,6 +743,8 @@ describe("The Query Class", function() {
                 client: client,
                 fromServer: responses.message1,
             });
+            requests.reset();
+
             conversation.lastMessage = m;
             query.data = [m];
             query._runMessage(43);
@@ -758,6 +760,8 @@ describe("The Query Class", function() {
                 client: client,
                 fromServer: responses.message2,
             });
+            requests.reset();
+
             conversation.lastMessage = conversation.createMessage("hi");
             query.data = [m1, m2];
             query._runMessage(44);
@@ -773,6 +777,8 @@ describe("The Query Class", function() {
                 client: client,
                 fromServer: responses.message2,
             });
+            requests.reset();
+
             conversation.lastMessage = conversation.createMessage("hi");
             query.data = [m1, m2];
             query._runMessage(45);
@@ -789,6 +795,8 @@ describe("The Query Class", function() {
                 client: client,
                 fromServer: responses.message2,
             });
+            requests.reset();
+
             conversation.lastMessage = conversation.createMessage("hi");
             conversation.syncState = layer.Constants.SYNC_STATE.SAVING;
             query.data = [m1, m2];

@@ -151,7 +151,7 @@ describe("The Content class", function() {
           })
         });
         expect(content.downloadUrl).toEqual("http://there.com");
-        expect(content.expiration).toEqual(300000);
+        expect(content.expiration.getTime()).toEqual(300000);
       });
 
       it("Should call the callback", function() {
