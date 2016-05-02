@@ -157,10 +157,6 @@ class Message extends Syncable {
     this.isInitializing = true;
     if (options && options.fromServer) {
       this._populateFromServer(options.fromServer);
-      const status = this.recipientStatus[client.userId];
-      if (status !== Constants.RECEIPT_STATE.READ && status !== Constants.RECEIPT_STATE.DELIVERED) {
-        this._sendReceipt('delivery');
-      }
     } else {
       this.sender = { userId: '', name: '' };
       this.sentAt = new Date();
@@ -177,6 +173,10 @@ class Message extends Syncable {
     this.isInitializing = false;
     if (options && options.fromServer) {
       client._addMessage(this);
+      const status = this.recipientStatus[client.userId];
+      if (status !== Constants.RECEIPT_STATE.READ && status !== Constants.RECEIPT_STATE.DELIVERED) {
+        this._sendReceipt('delivery');
+      }
     }
   }
 
@@ -473,7 +473,7 @@ class Message extends Syncable {
     // This little test exists so that we don't send receipts on Conversations we are no longer
     // participants in (participants = [] if we are not a participant)
     const conversation = this.getConversation(false);
-    if (!conversation || conversation.participants.length === 0) return;
+    if (conversation && conversation.participants.length === 0) return;
 
     this._setSyncing();
     this._xhr({
