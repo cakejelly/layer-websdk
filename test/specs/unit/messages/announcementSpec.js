@@ -46,4 +46,30 @@ describe("The Announcement class", function() {
         expect(announcement.getConversation()).toBe(undefined);
       });
     });
+
+    describe("The delete() method", function() {
+        it("Should fail if already deleting", function() {
+            // Setup
+            announcement.delete(layer.Constants.DELETION_MODE.ALL);
+
+            // Run
+            expect(function() {
+                announcement.delete();
+            }).toThrowError(layer.LayerError.dictionary.isDestroyed);
+        });
+
+        it("Should call _xhr", function() {
+            // Setup
+            spyOn(announcement, "_xhr");
+
+            // Run
+            announcement.delete();
+
+            // Posttest
+            expect(announcement._xhr).toHaveBeenCalledWith({
+                url: '',
+                method: 'DELETE'
+            }, jasmine.any(Function));
+        });
+    });
 });

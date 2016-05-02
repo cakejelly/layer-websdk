@@ -1,6 +1,7 @@
 const Message = require('./message');
 const Syncable = require('./syncable');
 const Root = require('./root');
+const LayerError = require('./layer-error');
 
 
 class Announcement extends Message {
@@ -9,6 +10,27 @@ class Announcement extends Message {
 
   _loaded(data) {
     this.getClient()._addMessage(this);
+  }
+
+  /**
+   * Delete the Announcement from the server.
+   *
+   * @method delete
+   */
+  delete(mode) {
+    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
+
+    const id = this.id;
+    const client = this.getClient();
+    this._xhr({
+      url: '',
+      method: 'DELETE',
+    }, result => {
+      if (!result.success && (!result.data || result.data.id !== 'not_found')) Syncable.load(id, client);
+    });
+
+    this._deleted();
+    this.destroy();
   }
 
   /**

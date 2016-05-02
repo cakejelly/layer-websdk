@@ -102,6 +102,10 @@ class MessagesQuery {
 }
 
 class AnnouncementQuery extends MessagesQuery {
+  constructor(options) {
+    super(options);
+    this._query.model = Query.Announcement;
+  }
   build() {
     return this._query;
   }
