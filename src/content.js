@@ -86,7 +86,7 @@ class Content extends Root {
       method: 'GET',
     }, result => {
       const { data } = result;
-      this.expiration = data.expiration;
+      this.expiration = new Date(data.expiration);
       this.downloadUrl = data.download_url;
       if (callback) callback(this.downloadUrl);
     });
