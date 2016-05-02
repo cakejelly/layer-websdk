@@ -874,6 +874,7 @@ class Query extends Root {
       // If a Message has changed and its in our result set, replace
       // it with a new immutable object
       case 'messages:change':
+      case 'messages:read':
         this._handleMessageChangeEvent(evt);
         break;
 
