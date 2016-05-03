@@ -107,6 +107,7 @@ class Client extends ClientAuth {
     this._messagesHash = {};
     this._queriesHash = {};
     this._identitiesHash = {};
+    this._serviceIdentitiesHash = {};
     this._scheduleCheckAndPurgeCacheItems = [];
 
     if (!options.users) {
@@ -132,6 +133,31 @@ class Client extends ClientAuth {
     Object.keys(Client.plugins).forEach(propertyName => {
       this[propertyName] = new Client.plugins[propertyName](this);
     });
+  }
+
+  /*
+   * @method _clientReady
+   * @private
+   * @fires ready
+   */
+  _clientReady() {
+    if (!this.user) {
+      const user = Identity.load(this.userid);
+      user.on('identities:loaded', () => {
+        this.user = user;
+        this._clientReady();
+      });
+      this.user.on('identities:loaded-error', () => this._clientReady());
+    }
+
+    if (!this.identityQuery) {
+      this.identityQuery = this.createQuery({
+        model: Query.Announcement,
+        paginationWindow: 500,
+      });
+    }
+
+    super();
   }
 
   /**
@@ -172,6 +198,16 @@ class Client extends ClientAuth {
       }
     });
     this._identitiesHash = null;
+
+    Object.keys(this._serviceIdentitiesHash).forEach(id => {
+      const c = this._serviceIdentitiesHash[id];
+      if (c && !c.isDestroyed) {
+        c.destroy();
+      }
+    });
+    this._serviceIdentitiesHash = null;
+
+    this.identitiesQuery = null;
 
     if (this.socketManager) this.socketManager.close();
   }
@@ -476,6 +512,16 @@ class Client extends ClientAuth {
     } else if (canLoad) {
       return Identity.load(id, this);
     }
+  }
+
+  getIdentityForServiceName(id) {
+    if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
+    if (!this._serviceIdentitiesHash[id]) {
+      this._serviceIdentitiesHash[id] = new Identity({
+        name: id,
+      });
+    }
+    return this._serviceIdentitiesHash[id];
   }
 
   /**
@@ -1187,6 +1233,10 @@ Client.prototype._scheduleCheckAndPurgeCacheAt = 0;
  * @type {layer.User[]}
  */
 Client.prototype.users = null;
+
+Client.prototype.user = null;
+
+Client.prototype.identitiesQuery = null;
 
 
 /**

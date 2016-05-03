@@ -158,7 +158,7 @@ class Message extends Syncable {
     if (options && options.fromServer) {
       this._populateFromServer(options.fromServer);
     } else {
-      this.sender = { userId: '', name: '' };
+      if (client) this.sender = client.user;
       this.sentAt = new Date();
     }
 
@@ -313,7 +313,7 @@ class Message extends Syncable {
 
     if (!conversation || Util.doesObjectMatch(status, oldStatus)) return;
 
-    const userId = client.userId;
+    const userId = client.user.userId;
     const isSender = this.sender.userId === userId;
     const userHasRead = status[userId] === Constants.RECEIPT_STATE.READ;
 
@@ -525,7 +525,6 @@ class Message extends Syncable {
       throw new Error(LayerError.dictionary.partsMissing);
     }
 
-    this.sender.userId = client.userId;
     this._setSyncing();
     client._addMessage(this);
 
@@ -746,6 +745,8 @@ class Message extends Syncable {
    * @param  {Object} m - Server description of the message
    */
   _populateFromServer(message) {
+    const client = this.getClient();
+
     this.id = message.id;
     this.url = message.url;
     const oldPosition = this.position;
@@ -776,10 +777,11 @@ class Message extends Syncable {
     this.sentAt = new Date(message.sent_at);
     this.receivedAt = message.received_at ? new Date(message.received_at) : undefined;
 
-    this.sender = {
-      userId: message.sender.user_id || '',
-      name: message.sender.name || '',
-    };
+    if (message.sender.user_id) {
+      this.sender = client.getIdentity(message.sender.user_id, true);
+    } else {
+      this.sender = client.getIdentityForServiceName(message.sender.name);
+    }
 
     this._setSynced();
 
@@ -936,7 +938,7 @@ class Message extends Syncable {
       fromServer: message,
       clientId: client.appId,
       _fromDB: message._fromDB,
-      _notify: fromWebsocket && message.is_unread && message.sender.user_id !== client.userId,
+      _notify: fromWebsocket && message.is_unread && message.sender.user_id !== client.user.userId,
     });
   }
 
@@ -1019,16 +1021,15 @@ Message.prototype.sentAt = null;
 Message.prototype.receivedAt = null;
 
 /**
- * Object representing the sender of the Message.
+ * Identity object representing the sender of the Message.
  *
- * Contains `userId` property which is
- * populated when the message was sent by a participant (or former participant)
- * in the Conversation.  Contains a `name` property which is
- * used when the Message is sent via a Named Platform API sender
- * such as "Admin", "Moderator", "Robot Jerking you Around".
+ * Most commonly used properties of Identity are:
+ * * displayName: A name for your UI
+ * * userId: Name for the user as represented on your system
+ * * name: Represents the name of a service if the sender was an automated system.
  *
  *      <span class='sent-by'>
- *        {message.sender.name || getDisplayNameForId(message.sender.userId)}
+ *        {message.sender.displayName || message.sender.name}
  *      </span>
  *
  * @type {Object}
