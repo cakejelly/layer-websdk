@@ -6,8 +6,6 @@
  *
  * TODO:
  * 0. Redesign this so that knowledge of the data is not hard-coded in
- * 1. JSDuck this class
- * 2. Update documentation repo
  * @class layer.db-manager
  * @protected
  */

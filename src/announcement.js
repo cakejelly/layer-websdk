@@ -1,3 +1,17 @@
+
+/**
+ * The Announcement class represents a type of Message sent by a server.
+ *
+ * Announcements can not be sent using the WebSDK, only received.
+ *
+ * You should never need to instantiate an Announcement; they should only be
+ * delivered via `messages:add` events when an Announcement is provided via
+ * websocket to the client, and `change` events on an Announcements Query.
+ *
+ * @class  layer.Announcement
+ * @extends layer.Message
+ */
+
 const Message = require('./message');
 const Syncable = require('./syncable');
 const Root = require('./root');
@@ -34,7 +48,7 @@ class Announcement extends Message {
   }
 
   /**
-   * Creates a message from the server's representation of a message.
+   * Creates an Announcement from the server's representation of an Announcement.
    *
    * Similar to _populateFromServer, however, this method takes a
    * message description and returns a new message instance using _populateFromServer
@@ -43,9 +57,8 @@ class Announcement extends Message {
    * @method _createFromServer
    * @protected
    * @static
-   * @param  {Object} message - Server's representation of the message
-   * @param  {layer.Conversation} conversation - Conversation for the message
-   * @return {layer.Message}
+   * @param  {Object} message - Server's representation of the announcement
+   * @return {layer.Announcement}
    */
   static _createFromServer(message, client) {
     const fromWebsocket = message.fromWebsocket;
