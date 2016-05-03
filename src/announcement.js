@@ -31,7 +31,7 @@ class Announcement extends Message {
    *
    * @method delete
    */
-  delete(mode) {
+  delete() {
     if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
 
     const id = this.id;
