@@ -180,6 +180,7 @@ const Logger = require('./logger');
 const CONVERSATION = 'Conversation';
 const MESSAGE = 'Message';
 const ANNOUNCEMENT = 'Announcement';
+const IDENTITY = 'Identity';
 const findConvIdRegex = new RegExp(
   /^conversation.id\s*=\s*['"](layer:\/\/\/conversations\/.{8}-.{4}-.{4}-.{4}-.{12})['"]$/);
 
@@ -332,12 +333,21 @@ class Query extends Root {
       this._triggerAsync('change', { data: [] });
     } else if (pageSize === 0) {
       // No need to load 0 results.
-    } else if (this.model === CONVERSATION) {
-      this._runConversation(pageSize);
-    } else if (this.model === MESSAGE && this.predicate) {
-      this._runMessage(pageSize);
-    } else if (this.model === ANNOUNCEMENT) {
-      this._runAnnouncement(pageSize);
+    } else {
+      switch (this.model) {
+        case CONVERSATION:
+          this._runConversation(pageSize);
+          break;
+        case MESSAGE:
+          if (this.predicate) this._runMessage(pageSize);
+          break;
+        case ANNOUNCEMENT:
+          this._runAnnouncement(pageSize);
+          break;
+        case IDENTITY:
+          this._runIdentity(pageSize);
+          break;
+      }
     }
   }
 
@@ -517,6 +527,42 @@ class Query extends Root {
     }
   }
 
+  /**
+   * Get Identities from the server.
+   *
+   * @method _runIdentities
+   * @private
+   * @param  {number} pageSize - Number of new results to request
+   */
+  _runIdentity(pageSize) {
+    // If no data, retrieve data from db cache in parallel with loading data from server
+    if (this.isReset) {
+      this.client.dbManager.loadIdentity(identities => this._appendResults({ data: identities }));
+    }
+    this.isReset = false;
+
+    // This is a pagination rather than an initial request if there is already data; get the fromId
+    // which is the id of the last result.
+    const lastIdentity = this.data[this.data.length - 1];
+    const fromId = (lastIdentity ? '&from_id=' + lastIdentity.id : '');
+
+    // If the last message we have loaded is already the Conversation's lastMessage, then just request data without paging,
+    // common occurence when query is populated with only a single result: conversation.lastMessage.
+    // if (conversation && conversation.lastMessage && lastMessage && lastMessage.id === conversation.lastMessage.id) fromId = '';
+    const newRequest = `identities?page_size=${pageSize}${fromId}`;
+
+    // Don't repeat still firing queries
+    if (newRequest !== this._firingRequest) {
+      this.isFiring = true;
+      this._firingRequest = newRequest;
+      this.client.xhr({
+        url: newRequest,
+        method: 'GET',
+        sync: false,
+      }, results => this._processRunResults(results, newRequest));
+    }
+  }
+
 
   /**
    * Process the results of the `_run` method; calls __appendResults.
@@ -563,10 +609,17 @@ class Query extends Root {
     newResults.forEach(itemIn => {
       let index;
       const item = this.client._getObject(itemIn.id);
-      if (this.model === MESSAGE || this.model === ANNOUNCEMENT) {
-        index = this._getInsertMessageIndex(item, data);
-      } else {
-        index = this._getInsertConversationIndex(item, data);
+      switch (this.model) {
+        case MESSAGE:
+        case ANNOUNCEMENT:
+          index = this._getInsertMessageIndex(item, data);
+          break;
+        case CONVERSATION:
+          index = this._getInsertConversationIndex(item, data);
+          break;
+        case IDENTITY:
+          index = data.length;
+          break;
       }
       data.splice(index, 0, this._getData(item));
     });
@@ -646,6 +699,12 @@ class Query extends Root {
           return index === -1 ? null : this.data[index];
         }
         break;
+      case 'identities':
+        if (this.model === IDENTITY) {
+          const index = this._getIndex(id);
+          return index === -1 ? null : this.data[index];
+        }
+        break;
     }
   }
 
@@ -679,10 +738,17 @@ class Query extends Root {
    * @param {layer.LayerEvent} evt
    */
   _handleChangeEvents(eventName, evt) {
-    if (this.model === CONVERSATION) {
-      this._handleConversationEvents(evt);
-    } else if (this.model === MESSAGE || this.model === ANNOUNCEMENT) {
-      this._handleMessageEvents(evt);
+    switch (this.model) {
+      case CONVERSATION:
+        this._handleConversationEvents(evt);
+        break;
+      case MESSAGE:
+      case ANNOUNCEMENT:
+        this._handleMessageEvents(evt);
+        break;
+      case IDENTITY:
+        this._handleIdentityEvents(evt);
+        break;
     }
   }
 
@@ -1029,6 +1095,107 @@ class Query extends Root {
       if (index !== -1) {
         removed.push({
           data: message,
+          index,
+        });
+        if (this.dataType === Query.ObjectDataType) {
+          this.data = [
+            ...this.data.slice(0, index),
+            ...this.data.slice(index + 1),
+          ];
+        } else {
+          this.data.splice(index, 1);
+        }
+      }
+    });
+
+    this.totalSize -= removed.length;
+    removed.forEach(removedObj => {
+      this._triggerChange({
+        type: 'remove',
+        target: this._getData(removedObj.data),
+        index: removedObj.index,
+        query: this,
+      });
+    });
+  }
+
+  _handleIdentityEvents(evt) {
+    switch (evt.eventName) {
+
+      // If a Identity has changed and its in our result set, replace
+      // it with a new immutable object
+      case 'identities:change':
+        this._handleIdentityChangeEvent(evt);
+        break;
+
+      // If Identities are added, and they aren't already in our result set
+      // add them.
+      case 'identities:add':
+        this._handleIdentityAddEvent(evt);
+        break;
+
+      // If a Identity is deleted and its in our result set, remove it
+      // and trigger an event
+      case 'identities:remove':
+        this._handleIdentityRemoveEvent(evt);
+        break;
+    }
+  }
+
+
+  _handleIdentityChangeEvent(evt) {
+    const index = this._getIndex(evt.target.id);
+
+    if (index !== -1) {
+      if (this.dataType === Query.ObjectDataType) {
+        this.data = [
+          ...this.data.slice(0, index),
+          evt.target.toObject(),
+          ...this.data.slice(index + 1),
+        ];
+      }
+      this._triggerChange({
+        type: 'property',
+        target: this._getData(evt.target),
+        query: this,
+        isChange: true,
+        changes: evt.changes,
+      });
+    }
+  }
+
+  _handleIdentityAddEvent(evt) {
+    const list = evt.identities
+      .filter(identity => this._getIndex(identity.id) === -1)
+      .map(identity => this._getData(identity));
+
+    // Add them to our result set and trigger an event for each one
+    if (list.length) {
+      const data = this.data = this.dataType === Query.ObjectDataType ? [].concat(this.data) : this.data;
+      list.forEach(item => data.splice(0, 0, item));
+
+      this.totalSize += list.length;
+
+      // Index calculated above may shift after additional insertions.  This has
+      // to be done after the above insertions have completed.
+      list.forEach(item => {
+        this._triggerChange({
+          type: 'insert',
+          index: this.data.indexOf(item),
+          target: item,
+          query: this,
+        });
+      });
+    }
+  }
+
+  _handleIdentityRemoveEvent(evt) {
+    const removed = [];
+    evt.identities.forEach(identity => {
+      const index = this._getIndex(identity.id);
+      if (index !== -1) {
+        removed.push({
+          data: identity,
           index,
         });
         if (this.dataType === Query.ObjectDataType) {
