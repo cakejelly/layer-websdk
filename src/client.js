@@ -85,7 +85,7 @@ const LayerError = require('./layer-error');
 const Syncable = require('./syncable');
 const Message = require('./message');
 const Announcement = require('./announcement');
-const User = require('./user');
+const Identity = require('./identity');
 const TypingIndicatorListener = require('./typing-indicators/typing-indicator-listener');
 const Util = require('./client-utils');
 const Root = require('./root');
@@ -106,6 +106,7 @@ class Client extends ClientAuth {
     this._conversationsHash = {};
     this._messagesHash = {};
     this._queriesHash = {};
+    this._identitiesHash = {};
     this._scheduleCheckAndPurgeCacheItems = [];
 
     if (!options.users) {
@@ -163,10 +164,14 @@ class Client extends ClientAuth {
       this._queriesHash[id].destroy();
     });
     this._queriesHash = null;
-    if (this.users) [].concat(this.users).forEach(user => user.destroy ? user.destroy() : null);
 
-    // Ideally we'd set it to null, but _adjustUsers would make it []
-    this.users = [];
+    Object.keys(this._identitiesHash).forEach(id => {
+      const c = this._identitiesHash[id];
+      if (c && !c.isDestroyed) {
+        c.destroy();
+      }
+    });
+    this._identitiesHash = null;
 
     if (this.socketManager) this.socketManager.close();
   }
@@ -439,6 +444,88 @@ class Client extends ClientAuth {
   }
 
   /**
+   * Retrieve a identity by Identifier.
+   *
+   *      var c = client.getIdentity('layer:///identities/user_id');
+   *
+   * If there is not an Identity with that id, it will return null.
+   *
+   * If you want it to load it from cache and then from server if not in cache, use the `canLoad` parameter.
+   * If loading from the server, the method will return
+   * a layer.Identity instance that has no data; the identities:loaded/identities:loaded-error events
+   * will let you know when the identity has finished/failed loading from the server.
+   *
+   *      var user = client.getIdentity('layer:///identities/123', true)
+   *      .on('identities:loaded', function() {
+   *          // Render the user list with all of its details loaded
+   *          myrerender(user);
+   *      });
+   *      // Render a placeholder for user until the details of user have loaded
+   *      myrender(user);
+   *
+   * @method getIdentity
+   * @param  {string} id
+   * @param  {boolean} [canLoad=false] - Pass true to allow loading an identity from
+   *                                    the server if not found
+   * @return {layer.Identity}
+   */
+  getIdentity(id, canLoad) {
+    if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
+    if (this._identitiesHash[id]) {
+      return this._identitiesHash[id];
+    } else if (canLoad) {
+      return Identity.load(id, this);
+    }
+  }
+
+  /**
+   * Adds an identity to the client.
+   *
+   * Typically, you do not need to call this; the Identity constructor will call this.
+   *
+   * @method _addIdentity
+   * @protected
+   * @param  {layer.Identity} identity
+   * @returns {layer.Client} this
+   */
+  _addIdentity(identity) {
+    const id = identity.id;
+    if (!this._identitiesHash[id]) {
+      // Register the Identity
+      this._identitiesHash[id] = identity;
+
+      // Make sure the client is set so that the next event bubbles up
+      if (identity.clientId !== this.appId) identity.clientId = this.appId;
+      this._triggerAsync('identities:add', { identities: [identity] });
+    }
+    return this;
+  }
+
+  /**
+   * Removes an identity from the client.
+   *
+   * Typically, you do not need to call this; the following code
+   * automatically calls _removeIdentity for you:
+   *
+   *      identity.destroy();
+   *
+   * @method _removeIdentity
+   * @protected
+   * @param  {layer.Identity} identity
+   * @returns {layer.Client} this
+   */
+  _removeIdentity(identity) {
+    // Insure we do not get any events, such as message:remove
+    identity.off(null, null, this);
+
+    if (this._identitiesHash[identity.id]) {
+      delete this._identitiesHash[identity.id];
+      this._triggerAsync('identitys:remove', { identitys: [identity] });
+    }
+    return this;
+  }
+
+  /**
    * Takes as input an object id, and either calls getConversation() or getMessage() as needed.
    *
    * Will only get cached objects, will not get objects from the server.
@@ -461,6 +548,8 @@ class Client extends ClientAuth {
         return this.getConversation(id);
       case 'queries':
         return this.getQuery(id);
+      case 'identities':
+        return this.getIdentity(id);
     }
   }
 
@@ -486,6 +575,8 @@ class Client extends ClientAuth {
           return Announcement._createFromServer(obj, this);
         case 'conversations':
           return Conversation._createFromServer(obj, this);
+        case 'identities':
+          return Identity._createFromServer(obj, this);
       }
     }
   }
@@ -513,6 +604,12 @@ class Client extends ClientAuth {
 
     this._foldEvents(addMessages, 'messages', this);
     this._foldEvents(removeMessages, 'messages', this);
+
+    const addIdentities = this._delayedTriggers.filter((evt) => evt[0] === 'identities:add');
+    const removeIdentities = this._delayedTriggers.filter((evt) => evt[0] === 'identities:remove');
+
+    this._foldEvents(addIdentities, 'identities', this);
+    this._foldEvents(removeIdentities, 'identities', this);
 
     super._processDelayedTriggers();
   }
@@ -1417,12 +1514,15 @@ Client._supportedEvents = [
   'messages:delete',
 
   /**
-   * A User has been added or changed in the users array.
    *
-   * This event is not yet well supported.
    * @event
    */
-  'users:change',
+  'identities:change',
+
+  'identities:add',
+
+  'identities:remove',
+
 
   /**
    * A Typing Indicator state has changed.

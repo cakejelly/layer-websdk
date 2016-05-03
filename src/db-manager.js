@@ -52,6 +52,10 @@ class DbManager extends Root {
       this.client.on('messages:add', evt => this.writeMessages(evt.messages, false));
       this.client.on('messages:change', evt => this.writeMessages([evt.target], true));
       this.client.on('messages:delete', evt => this.deleteObjects('messages', [evt.target]));
+
+      this.client.on('identities:add', evt => this.writeIdentities(evt.identities, false));
+      this.client.on('identities:change', evt => this.writeIdentities([evt.target], true));
+      this.client.on('identities:delete', evt => this.deleteObjects('identities', [evt.target]));
     }
 
     this.client.syncManager.on('sync:add', evt => this.writeSyncEvents([evt.request], false));
@@ -321,6 +325,65 @@ class DbManager extends Root {
    */
   writeSyncEvents(syncEvents, isUpdate, callback) {
     this._writeObjects('syncQueue', this._getSyncEventData(syncEvents), isUpdate, callback);
+  }
+
+
+  /**
+   * Convert array of Identity instances into Identity DB Entries.
+   *
+   * A Identity DB entry looks a lot like the server representation, but
+   * includes a sync_state property, and `last_message` contains a message ID not
+   * a Message object.
+   *
+   * @method _getIdentityData
+   * @private
+   * @param {layer.Identity[]} identities
+   * @return {Object[]} identities
+   */
+  _getIdentityData(identities) {
+    return identities.filter(identity => {
+      if (identity._fromDB) {
+        identity._fromDB = false;
+        return false;
+      } else if (identity.isLoading) {
+        return false;
+      } else {
+        return true;
+      }
+    }).map(identity => {
+      const item = {
+        id: identity.id,
+        url: identity.url,
+        avatar_url: identity.avatarUrl,
+        display_name: identity.displayName,
+        first_name: identity.firstName,
+        last_name: identity.lastName,
+        phone_number: identity.phoneNumber,
+        email_address: identity.emailAddress,
+        metadata: identity.metadata,
+        public_key: identity.publicKey,
+        user_id: identity.userId,
+        sync_state: identity.syncState,
+      };
+      return item;
+    });
+  }
+
+  /**
+   * Writes an array of Identities to the Database.
+   *
+   * There are times when you will not know if this is an Insert or Update operation;
+   * if there is uncertainy, set `isUpdate` to false, and the correct end result will
+   * still be achieved (but less efficiently).
+   *
+   * @method writeIdentities
+   * @param {layer.Identity[]} identities - Array of Identities to write
+   * @param {boolean} isUpdate - If true, then update an entry; if false, insert an entry... and if one is found to already exist, update it.
+   * @param {Function} [callback]
+   */
+  writeIdentities(identities, isUpdate, callback) {
+    this._writeObjects('identities',
+      this._getIdentityData(identities.filter(identity => !identity.isDestroyed)), isUpdate, callback);
   }
 
   /**
