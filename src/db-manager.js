@@ -765,11 +765,8 @@ class DbManager extends Root {
   deleteTables(callback) {
     this.onOpen(() => {
       try {
-        const transaction = this.db.transaction(['conversations', 'identities', 'messages', 'syncQueue'], 'readwrite');
-        transaction.objectStore('conversations').clear();
-        transaction.objectStore('identities').clear();
-        transaction.objectStore('messages').clear();
-        transaction.objectStore('syncQueue').clear();
+        const transaction = this.db.transaction(TABLES, 'readwrite');
+        TABLES.forEach(tableName => transaction.objectStore(tableName).clear());
         transaction.oncomplete = callback;
       } catch (e) {
         // Noop
