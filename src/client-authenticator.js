@@ -39,8 +39,8 @@ const SyncManager = require('./sync-manager');
 const DbManager = require('./db-manager');
 const { XHRSyncEvent, WebsocketSyncEvent } = require('./sync-event');
 const { ACCEPT, LOCALSTORAGE_KEYS } = require('./const');
-const atob = typeof window === 'undefined' ? require('atob') : window.atob;
 const logger = require('./logger');
+const Util = require('./client-utils');
 
 const MAX_XHR_RETRIES = 3;
 
@@ -353,8 +353,8 @@ class ClientAuthenticator extends Root {
     if (!identityToken) {
       throw new Error(LayerError.dictionary.identityTokenMissing);
     } else {
-      // Store the UserId and get a sessionToken; bypass the __adjustUserId connected test
-      this.userId = JSON.parse(atob(identityToken.split('.')[1])).prn;
+      const userData = Util.decode(identityToken.split('.')[1]);
+      this.userId = JSON.parse(userData).prn;
       this.xhr({
         url: '/sessions',
         method: 'POST',
