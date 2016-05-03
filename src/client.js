@@ -157,7 +157,7 @@ class Client extends ClientAuth {
       });
     }
 
-    super();
+    this.super();
   }
 
   /**
