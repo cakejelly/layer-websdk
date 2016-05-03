@@ -188,7 +188,7 @@ class ClientAuthenticator extends Root {
   _hasUserIdChanged(userId) {
     try {
       const sessionData = global.localStorage[LOCALSTORAGE_KEYS.SESSIONDATA + this.appId];
-      if (!sessionData) return false;
+      if (!sessionData) return true;
       return JSON.parse(sessionData).userId !== userId;
     } catch (error) {
       return true;

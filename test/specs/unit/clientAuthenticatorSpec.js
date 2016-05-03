@@ -150,12 +150,12 @@ describe("The Client Authenticator Class", function() {
         expect(client._hasUserIdChanged('FrodoTheDodo')).toBe(false);
       });
 
-      it("Should return false if there is no session data", function() {
+      it("Should return true if there is no session data", function() {
         // Setup
         localStorage.removeItem([layer.Constants.LOCALSTORAGE_KEYS.SESSIONDATA + client.appId]);
 
         // Run
-        expect(client._hasUserIdChanged('FrodoTheDodo')).toBe(false);
+        expect(client._hasUserIdChanged('FrodoTheDodo')).toBe(true);
       });
 
       it("Should return true if there is a change in userId from the session data", function() {
