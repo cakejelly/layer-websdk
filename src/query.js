@@ -485,9 +485,9 @@ class Query extends Root {
   }
 
   /**
-   * Get Messages from the server.
+   * Get Announcements from the server.
    *
-   * @method _runMessage
+   * @method _runAnnouncement
    * @private
    * @param  {number} pageSize - Number of new results to request
    */
