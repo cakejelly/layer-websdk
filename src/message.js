@@ -469,7 +469,6 @@ class Message extends Syncable {
    * @param {string} [type=read] - One of layer.Constants.RECEIPT_STATE.READ or layer.Constants.RECEIPT_STATE.DELIVERY
    */
   _sendReceipt(type) {
-
     // This little test exists so that we don't send receipts on Conversations we are no longer
     // participants in (participants = [] if we are not a participant)
     const conversation = this.getConversation(false);
@@ -927,7 +926,6 @@ class Message extends Syncable {
    * @protected
    * @static
    * @param  {Object} message - Server's representation of the message
-   * @param  {string} conversationId - Conversation for the message
    * @param  {layer.Client} client
    * @return {layer.Message}
    */

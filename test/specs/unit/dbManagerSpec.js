@@ -1,4 +1,5 @@
 /*eslint-disable */
+
 describe("The DbManager Class", function() {
     var appId = "Fred's App";
 

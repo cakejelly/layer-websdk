@@ -10,7 +10,7 @@
  * @protected
  */
 
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -20,6 +20,8 @@ const Util = require('./client-utils');
 function getDate(inDate) {
   return inDate ? inDate.toISOString() : null;
 }
+
+const TABLES = ['conversations', 'messages', 'identities', 'syncQueue'];
 
 class DbManager extends Root {
 
@@ -36,8 +38,13 @@ class DbManager extends Root {
   constructor(options) {
     super(options);
 
+    // If no indexedDB, treat everything as disabled.
+    if (!window.indexedDB) {
+      this.tables = DbManager.DisabledState;
+    }
+
     // If Client is a layer.ClientAuthenticator, it won't support these events; this affects Unit Tests
-    if (this.client.constructor._supportedEvents.indexOf('conversations:add') !== -1) {
+    else if (this.client.constructor._supportedEvents.indexOf('conversations:add') !== -1) {
       this.client.on('conversations:add', evt => this.writeConversations(evt.conversations, false));
       this.client.on('conversations:change', evt => this.writeConversations([evt.target], true));
       this.client.on('conversations:delete', evt => this.deleteObjects('conversations', [evt.target]));
@@ -49,16 +56,6 @@ class DbManager extends Root {
 
     this.client.syncManager.on('sync:add', evt => this.writeSyncEvents([evt.request], false));
     this.client.syncManager.on('sync:abort sync:error', evt => this.deleteObjects('syncQueue', [evt.request]));
-
-    // If no indexedDB, treat everything as disabled.
-    if (!window.indexedDB) {
-      this.tables = {
-        identities: true,
-        conversations: true,
-        messages: true,
-        syncQueue: true,
-      };
-    }
 
     // Sync Queue only really works properly if we have the Messages and Conversations written to the DB; turn it off
     // if that won't be the case.
@@ -83,7 +80,11 @@ class DbManager extends Root {
     // Open the database
     const request = window.indexedDB.open('LayerWebSDK_' + this.client.appId + '_' + this.client.userId, DB_VERSION);
 
-    request.onerror = (evt) => console.error('Database Unable to Open: ', evt.target.error);
+    request.onerror = (evt) => {
+      logger.error('Database Unable to Open: ', evt.target.error);
+      this.tables = DbManager.DisabledState;
+    };
+
     request.onupgradeneeded = (evt) => this._onUpgradeNeeded(evt);
     request.onsuccess = (evt) => {
       this.db = evt.target.result;
@@ -126,45 +127,33 @@ class DbManager extends Root {
   /* istanbul ignore next */
   _onUpgradeNeeded(event) {
     const db = event.target.result;
-    try {
-      db.deleteObjectStore('conversations');
-    } catch (e) {
-      // Noop
-    }
-    try {
-      db.deleteObjectStore('identities');
-    } catch (e) {
-      // Noop
-    }
-    try {
-      db.deleteObjectStore('messages');
-    } catch (e) {
-      // Noop
-    }
-    try {
-      db.deleteObjectStore('syncQueue');
-    } catch (e) {
-      // Noop
-    }
-    const stores = [
-      db.createObjectStore('conversations', { keyPath: 'id' }),
-      db.createObjectStore('messages', { keyPath: 'id' }),
-      db.createObjectStore('identities', { keyPath: 'id' }),
-      db.createObjectStore('syncQueue', { keyPath: 'id' }),
-    ];
-
-    stores[1].createIndex('conversation', 'conversation', { unique: false });
 
     let completeCount = 0;
     function onComplete() {
       completeCount++;
-      if (completeCount === stores.length) {
+      if (completeCount === TABLES.length) {
         this.isOpen = true;
         this.trigger('open');
       }
     }
 
-    stores.forEach(store => (store.transaction.oncomplete = onComplete));
+    TABLES.forEach((tableName) => {
+      try {
+        db.deleteObjectStore(tableName);
+      } catch (e) {
+        // Noop
+      }
+      try {
+        const store = db.createObjectStore(tableName, { keyPath: 'id' });
+        if (tableName === 'messages') {
+          store.createIndex('conversation', 'conversation', { unique: false });
+        }
+        store.transaction.oncomplete = onComplete;
+      } catch (e) {
+        // Noop
+        logger.error(`Failed to create object store ${tableName}`, e);
+      }
+    });
   }
 
   /**
@@ -395,15 +384,14 @@ class DbManager extends Root {
    */
   loadConversations(callback) {
     // Step 1: Get all Conversations
-    this._loadAll('conversations', data => {
-
+    this._loadAll('conversations', (data) => {
       // Step 2: Gather all Message IDs needed to initialize these Conversation's lastMessage properties.
       const messagesToLoad = data
         .map(item => item.last_message)
         .filter(messageId => messageId && !this.client.getMessage(messageId));
 
       // Step 3: Load all Messages needed to initialize these Conversation's lastMessage properties.
-      this.getObjects('messages', messagesToLoad, messages => {
+      this.getObjects('messages', messagesToLoad, (messages) => {
         this._loadConversationsResult(data, messages, callback);
       });
     });
@@ -544,9 +532,7 @@ class DbManager extends Root {
    * @param {layer.SyncEvent[]} callback.result
    */
   loadSyncQueue(callback) {
-    this._loadAll('syncQueue', syncEvents => {
-      this._loadSyncEventRelatedData(syncEvents, callback);
-    });
+    this._loadAll('syncQueue', syncEvents => this._loadSyncEventRelatedData(syncEvents, callback));
   }
 
   /**
@@ -575,9 +561,9 @@ class DbManager extends Root {
 
     // Load any Messages/Conversations that are targets of operations.
     // Call _createMessage or _createConversation on all targets found.
-    this.getObjects('messages', messageIds, messages => {
+    this.getObjects('messages', messageIds, (messages) => {
       messages.forEach(message => this._createMessage(message));
-      this.getObjects('conversations', conversationIds, conversations => {
+      this.getObjects('conversations', conversationIds, (conversations) => {
         conversations.forEach(conversation => this._createConversation(conversation));
         this._loadSyncEventResults(syncEvents, callback);
       });
@@ -597,11 +583,11 @@ class DbManager extends Root {
     // If the target is present in the sync event, but does not exist in the system,
     // do NOT attempt to instantiate this event... unless its a DELETE operation.
     const newData = syncEvents
-    .filter(syncEvent => {
+    .filter((syncEvent) => {
       const hasTarget = Boolean(syncEvent.target && this.client._getObject(syncEvent.target));
       return syncEvent.operation === 'DELETE' || hasTarget;
     })
-    .map(syncEvent => {
+    .map((syncEvent) => {
       if (syncEvent.isWebsocket) {
         return new SyncEvent.WebsocketSyncEvent({
           target: syncEvent.target,
@@ -797,14 +783,11 @@ class DbManager extends Root {
   deleteTables(callback) {
     this.onOpen(() => {
       try {
-        const transaction = this.db.transaction(['conversations', 'identities', 'messages', 'syncQueue'], 'readwrite');
-        transaction.objectStore('conversations').clear();
-        transaction.objectStore('identities').clear();
-        transaction.objectStore('messages').clear();
-        transaction.objectStore('syncQueue').clear();
+        const transaction = this.db.transaction(TABLES, 'readwrite');
+        TABLES.forEach(tableName => transaction.objectStore(tableName).clear());
         transaction.oncomplete = callback;
       } catch (e) {
-        // Noop
+        logger.error('Failed to delete table', e);
       }
     });
   }
@@ -832,6 +815,13 @@ DbManager.prototype.tables = null;
  * @type IDBDatabase
  */
 DbManager.prototype.db = null;
+
+DbManager.DisabledState = {
+  identities: false,
+  conversations: false,
+  messages: false,
+  syncQueue: false,
+};
 
 DbManager._supportedEvents = [
   'open',

@@ -30,6 +30,7 @@
   * Introduces the layer.Announcement class
   * Introduces the ability to create Queries to receive Announcements
 
+
 #### Bug Fixes
 
 * Caching Fixes

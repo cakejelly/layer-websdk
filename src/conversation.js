@@ -1119,7 +1119,6 @@ class Conversation extends Syncable {
    * @return {layer.Conversation}        [description]
    */
   static _createFromServer(conversation, client) {
-    // If the Conversation already exists in cache, update the cache
     return new Conversation({
       client,
       fromServer: conversation,

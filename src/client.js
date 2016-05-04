@@ -172,7 +172,6 @@ class Client extends ClientAuth {
   }
 
   destroy() {
-
     // Cleanup all plugins
     Object.keys(Client.plugins).forEach(propertyName => {
       if (this[propertyName]) {
@@ -480,14 +479,11 @@ class Client extends ClientAuth {
       item._populateFromServer(obj);
       return item;
     } else {
-      // TODO: Factory method in Syncable class?
       switch (Util.typeFromID(obj.id)) {
         case 'messages':
           return Message._createFromServer(obj, this);
-
         case 'announcements':
           return Announcement._createFromServer(obj, this);
-
         case 'conversations':
           return Conversation._createFromServer(obj, this);
       }

@@ -439,7 +439,7 @@ The `messages:loaded` event will be called immediately if its already loaded.
 
 ## Persistence
 
-Options exist to cache data on in browser.  All of these capabilities are protected by the `isTrustedDevice` property.  If the device is not trusted, no data will be stored.  This is the default state.  But if you set `isTrustedState` to true, then data can be saved.
+Options exist to cache data in the browser.  All of these capabilities are protected by the `isTrustedDevice` property.  If the device is not trusted, no data will be stored.  This is the default state.  But if you set `isTrustedState` to true, then data can be saved.
 
 ```javascript
 var client = new layer.Client({
@@ -489,7 +489,7 @@ Storing these allows a user to quickly see their Conversation list even without 
 
 ### Identities
 
-Identities are used to help render information about people in Conversations or who you may want to start a Conversation with.  Storing identities allows this data to be quickly available and easily kept in sync, allowing for quicker start time.  You control what goes in the Identity from your servers via https://developer.layer.com/docs/platform/users#managing-identity.  If your writing phone numbers, email addresses, or other information that may be sensitive, consider whether these benefits are appropriate.
+Identities are used to help render information about people in Conversations or who you may want to start a Conversation with.  Storing identities allows this data to be quickly available and easily kept in sync, allowing for quicker start time.  You control what goes in the Identity from your servers via [Platform API](https://developer.layer.com/docs/platform/users#managing-identity).  If your writing phone numbers, email addresses, or other information that may be sensitive, consider whether these benefits are appropriate.
 
 ### Server Requests
 

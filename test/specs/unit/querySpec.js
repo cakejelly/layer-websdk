@@ -722,8 +722,9 @@ describe("The Query Class", function() {
         it("Should skip call dbManager.loadMessages if its not a new query", function() {
           query._reset();
           query._runMessage(100);
+
           spyOn(client.dbManager, "loadMessages");
-          query._runMessage(142);
+          query._runMessage(100);
           expect(client.dbManager.loadMessages).not.toHaveBeenCalled();
         });
 

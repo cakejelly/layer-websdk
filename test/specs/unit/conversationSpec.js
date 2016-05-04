@@ -1525,9 +1525,6 @@ describe("The Conversation Class", function() {
         });
     });
 
-
-
-
     describe("The on() method", function() {
         it("Should call any callbacks if subscribing to conversations:loaded", function() {
             // Setup

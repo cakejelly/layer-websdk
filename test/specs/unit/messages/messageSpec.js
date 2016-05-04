@@ -1270,6 +1270,46 @@ describe("The Message class", function() {
       });
     });
 
+    describe("The _getSendData() method", function() {
+      var m;
+      beforeEach(function() {
+          m = conversation.createMessage("hello");
+          m.addPart({body: "there", mimeType: "text/plain"});
+      });
+
+      afterEach(function() {
+          m.destroy();
+      });
+      it("Should update the Conversation ID of a create request", function() {
+        m.conversationId = "new id";
+        expect(m._getSendData({
+          method: 'Message.create',
+          object_id: conversation.id,
+          data: {
+            parts: [{
+              mime_type: "actor/mime",
+              body: "I am a Mime"
+            }],
+            notification: {
+              text: "Hey"
+            }
+          }
+        })).toEqual({
+          method: 'Message.create',
+          object_id: 'new id',
+          data: {
+            parts: [{
+              mime_type: "actor/mime",
+              body: "I am a Mime"
+            }],
+            notification: {
+              text: "Hey"
+            }
+          }
+        });
+      });
+    });
+
     describe("The _sendResult() method", function() {
         var m;
         beforeEach(function() {

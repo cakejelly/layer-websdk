@@ -150,12 +150,12 @@ describe("The Client Authenticator Class", function() {
         expect(client._hasUserIdChanged('FrodoTheDodo')).toBe(false);
       });
 
-      it("Should return false if there is no session data", function() {
+      it("Should return true if there is no session data", function() {
         // Setup
         localStorage.removeItem([layer.Constants.LOCALSTORAGE_KEYS.SESSIONDATA + client.appId]);
 
         // Run
-        expect(client._hasUserIdChanged('FrodoTheDodo')).toBe(false);
+        expect(client._hasUserIdChanged('FrodoTheDodo')).toBe(true);
       });
 
       it("Should return true if there is a change in userId from the session data", function() {
@@ -395,6 +395,7 @@ describe("The Client Authenticator Class", function() {
         expect(client.onlineManager.start).toHaveBeenCalledWith();
       });
 
+
       it("Should call _clearStoredData if not a trusted device", function() {
         // Setup
         client._initComponents();
@@ -607,6 +608,18 @@ describe("The Client Authenticator Class", function() {
 
             // Posttest
             expect(client.userId).toEqual("93c83ec4-b508-4a60-8550-099f9c42ec1a");
+        });
+
+
+        it("Should set a userId with a url encoded url that is not base64", function() {
+            // Pretest
+            expect(client.userId).toEqual("");
+
+            // Run
+            client.answerAuthenticationChallenge("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImN0eSI6ImxheWVyLWVpdDt2PTEiLCJraWQiOiI5NGZkYzM2MC1iZWU5LTExZTUtOWMwNy0xMzdlMDAwMDAwYjAifQ.eyJpc3MiOiI1OGMxN2Y4NC1iYjFjLTExZTUtOGRiOC0wMTA0MDAwMDAwYjAiLCJwcm4iOiJIZXlIbzAwMTgzOTk2ODU4MzU1NDE5NjgiLCJpYXQiOjE0NjE3MDMzOTIsImV4cCI6MTQ2MjkxMjk5MiwibmNlIjoic0FWcERhNlM2VV9aSk9ISzVBQXRXaHRVb3ZsalpsT0U4eDV6LWdEcUdZMDVrWjk4VkdRaVlEQVJPeU9FVll2Yl9IYmtoNG9tQWU2ZXlZM0lvczlOSUEiLCJkaXNwbGF5X25hbWUiOiJIZXlIbyIsImF2YXRhcl91cmwiOiJodHRwOi8vZ29vZ2xlLmNvbS8_cT1oZXlobyJ9.JZVjR92thQR1J4p47vV7elsmTQOC3qGP_ofDc0-LJKCBvCOL0wi1I2NTvfXmiB_M0M6DjiHuPZA7-gNQY8-L3NqZs4-UmamkgK3oV3HeplDcvye7a23QfJgHDoyuluNWKERb3j8ho1UdNqihynqJjM7iYaYQfWQRgSRhYbwLAjQ");
+
+            // Posttest
+            expect(client.userId).toEqual("HeyHo0018399685835541968");
         });
 
         it("Should request a sessionToken", function() {
