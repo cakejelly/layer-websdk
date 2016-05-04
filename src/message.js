@@ -314,7 +314,7 @@ class Message extends Syncable {
     if (!conversation || Util.doesObjectMatch(status, oldStatus)) return;
 
     const userId = client.user.userId;
-    const isSender = this.sender.userId === userId;
+    const isSender = this.sender.sessionOwner;
     const userHasRead = status[userId] === Constants.RECEIPT_STATE.READ;
 
     try {
@@ -777,11 +777,17 @@ class Message extends Syncable {
     this.sentAt = new Date(message.sent_at);
     this.receivedAt = message.received_at ? new Date(message.received_at) : undefined;
 
+    let sender;
+
     if (message.sender.user_id) {
-      this.sender = client.getIdentity(message.sender.user_id, true);
+      message.sender.id = 'layer:///identities/' + message.sender.user_id;
+      sender = client.getIdentity(message.sender.user_id);
     } else {
-      this.sender = client.getIdentityForServiceName(message.sender.name);
+      message.sender.id = 'layer:///serviceidentities/' + message.sender.name;
+      sender = client.getIdentityForService(message.sender.name);
     }
+    if (!sender) sender = client._createObject(this.sender);
+    this.sender = sender;
 
     this._setSynced();
 

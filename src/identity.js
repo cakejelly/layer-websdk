@@ -28,7 +28,38 @@ class Identity extends Syncable {
     this.isInitializing = false;
   }
 
+  static _createFromServer(identity, client) {
+    // If the Identity already exists in cache, update the cache
+    return new Identity({
+      client,
+      fromServer: identity,
+      _fromDB: identity._fromDB,
+    });
+  }
+}
 
+Identity.prototype.id = '';
+Identity.prototype.displayName = '';
+Identity.prototype.localCreatedAt = null;
+Identity.prototype.sessionOwner = false;
+
+Identity.inObjectIgnore = Root.inObjectIgnore;
+
+Identity.bubbleEventParent = 'getClient';
+
+Identity._supportedEvents = [
+  'identities:add',
+  'identities:change',
+  'identities:remove',
+  'identities:loaded',
+  'identities:loaded-error',
+];
+
+Root.initClass.apply(Identity, [Identity, 'Identity']);
+Syncable.subclasses.push(Identity);
+
+
+class UserIdentity extends Identity {
   /**
    * Populates this instance using server-data.
    *
@@ -67,45 +98,23 @@ class Identity extends Syncable {
   _loaded(data) {
     this.getClient()._addIdentity(this);
   }
-
-  static _createFromServer(identity, client) {
-    // If the Identity already exists in cache, update the cache
-    return new Identity({
-      client,
-      fromServer: identity,
-      _fromDB: identity._fromDB,
-    });
-  }
 }
 
-Identity.prototype.id = '';
-Identity.prototype.url = '';
-Identity.prototype.userId = '';
-Identity.prototype.avatarUrl = '';
-Identity.prototype.displayName = '';
-Identity.prototype.firstName = '';
-Identity.prototype.lastName = '';
-Identity.prototype.emailAddress = '';
-Identity.prototype.phoneNumber = '';
-Identity.prototype.metadata = null;
-Identity.prototype.publicKey = '';
+UserIdentity.prototype.url = '';
+UserIdentity.prototype.userId = '';
+UserIdentity.prototype.avatarUrl = '';
+UserIdentity.prototype.firstName = '';
+UserIdentity.prototype.lastName = '';
+UserIdentity.prototype.emailAddress = '';
+UserIdentity.prototype.phoneNumber = '';
+UserIdentity.prototype.metadata = null;
+UserIdentity.prototype.publicKey = '';
+UserIdentity.prefixUUID = 'layer:///identities/';
+
+
 Identity.prototype.name = '';
-Identity.prototype.localCreatedAt = null;
 
-Identity.prefixUUID = 'layer:///identities/';
-
-Identity.inObjectIgnore = Root.inObjectIgnore;
-
-Identity.bubbleEventParent = 'getClient';
-
-Identity._supportedEvents = [
-  'identities:add',
-  'identities:change',
-  'identities:remove',
-  'identities:loaded',
-  'identities:loaded-error',
-];
-
-Root.initClass.apply(Identity, [Identity, 'Identity']);
-Syncable.subclasses.push(Identity);
-module.exports = Identity;
+module.exports = {
+  Identity,
+  UserIdentity,
+};

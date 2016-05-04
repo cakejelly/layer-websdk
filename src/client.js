@@ -142,22 +142,17 @@ class Client extends ClientAuth {
    */
   _clientReady() {
     if (!this.user) {
+      // TODO: This should account for persistence!
       const user = Identity.load(this.userid);
+      user.sessionOwner = true;
       user.on('identities:loaded', () => {
         this.user = user;
         this._clientReady();
       });
-      this.user.on('identities:loaded-error', () => this._clientReady());
+      this.user.on('identities:loaded-error', () => setTimeout(() => this._clientReady(), 2000));
+    } else if (this.user.isSynced()) {
+      this.super();
     }
-
-    if (!this.identityQuery) {
-      this.identityQuery = this.createQuery({
-        model: Query.Announcement,
-        paginationWindow: 500,
-      });
-    }
-
-    this.super();
   }
 
   /**
@@ -206,8 +201,6 @@ class Client extends ClientAuth {
       }
     });
     this._serviceIdentitiesHash = null;
-
-    this.identitiesQuery = null;
 
     if (this.socketManager) this.socketManager.close();
   }
@@ -514,14 +507,11 @@ class Client extends ClientAuth {
     }
   }
 
-  getIdentityForServiceName(id) {
+  getIdentityForService(id) {
     if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
-    if (!this._serviceIdentitiesHash[id]) {
-      this._serviceIdentitiesHash[id] = new Identity({
-        name: id,
-      });
+    if (this._serviceIdentitiesHash[id]) {
+      return this._serviceIdentitiesHash[id];
     }
-    return this._serviceIdentitiesHash[id];
   }
 
   /**
@@ -596,6 +586,8 @@ class Client extends ClientAuth {
         return this.getQuery(id);
       case 'identities':
         return this.getIdentity(id);
+      case 'serviceidentities':
+        return this.getIdentityForService(id);
     }
   }
 
@@ -622,6 +614,7 @@ class Client extends ClientAuth {
         case 'conversations':
           return Conversation._createFromServer(obj, this);
         case 'identities':
+        case 'serviceidentities':
           return Identity._createFromServer(obj, this);
       }
     }
@@ -1235,8 +1228,6 @@ Client.prototype._scheduleCheckAndPurgeCacheAt = 0;
 Client.prototype.users = null;
 
 Client.prototype.user = null;
-
-Client.prototype.identitiesQuery = null;
 
 
 /**
