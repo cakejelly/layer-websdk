@@ -90,7 +90,9 @@ class DbManager extends Root {
     }
     request.onupgradeneeded = (evt) => this._onUpgradeNeeded(evt);
     request.onsuccess = (evt) => {
+      console.log("DB IS NOW OPEN");
       this.db = evt.target.result;
+      console.dir(this.db);
       this.isOpen = true;
       this.trigger('open');
 
