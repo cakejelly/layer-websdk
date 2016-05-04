@@ -179,7 +179,7 @@ class Syncable extends Root {
  *
  * Possible values are:
  *
- *  * layer.SYNC_STATE.NEW: Newly created; local only.
+ *  * layer.Constants.SYNC_STATE.NEW: Newly created; local only.
  *  * layer.Constants.SYNC_STATE.SAVING: Newly created; being sent to the server
  *  * layer.Constants.SYNC_STATE.SYNCING: Exists on both client and server, but changes are being sent to server.
  *  * layer.Constants.SYNC_STATE.SYNCED: Exists on both client and server and is synced.
