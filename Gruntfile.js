@@ -132,7 +132,6 @@ module.exports = function (grunt) {
           }
         }
       },
-
     },
     remove: {
       build: {
@@ -186,21 +185,7 @@ module.exports = function (grunt) {
       debug: {
         src: ["build/client.debug.js"]
       },
-      coverage: {
-        src: ["coverage/index.js"],
-        options: {
-          summary: false,
-          display: "none",
-          template: require('grunt-template-jasmine-istanbul'),
-          templateOptions: {
-            coverage: 'coverage/data/coverage.json',
-            ignoreFiles: ["coverage/index.js", "lib/user.js"],
-            report: [{ type: "text", options: { dir: 'coverage/report/text' } },
-              { type: "html", options: { dir: 'coverage/report' } }]
 
-          }
-        }
-      }
     },
     // Adds support for the ignoreFiles parameter, which is needed for removing generated files from the result
     copy: {
@@ -252,8 +237,6 @@ module.exports = function (grunt) {
   // Building
   grunt.loadNpmTasks('grunt-babel');
   grunt.loadNpmTasks('grunt-browserify');
-  grunt.loadNpmTasks('grunt-contrib-watch');
-  grunt.loadNpmTasks('grunt-contrib-uglify');
   grunt.loadNpmTasks('grunt-remove');
   grunt.registerTask('debug', ['browserify:debug']);
   grunt.registerTask('buildmin', ['browserify:build', 'uglify', 'remove:build']);
@@ -261,7 +244,7 @@ module.exports = function (grunt) {
   grunt.registerTask('prepublish', ['babel:dist']);
 
   // Documentation
-  grunt.loadNpmTasks('grunt-jsduck');
+
   grunt.registerTask('docs', ['babel:dist', 'jsduck']);
 
   // Testing
@@ -270,11 +253,9 @@ module.exports = function (grunt) {
 
 
   // Coverage Tests; warning: First run of grunt coverage will NOT use the copied istanbul fix; only the subsequent runs will.
-  grunt.loadNpmTasks('grunt-contrib-copy');
-  grunt.registerTask('coverage', ['copy:fixIstanbul', 'babel:dist', 'browserify:coverage', 'jasmine:coverage']);
+
+
 
   // Saucelabs Tests
-  grunt.loadNpmTasks('grunt-saucelabs');
-  grunt.loadNpmTasks('grunt-contrib-connect');
-  grunt.registerTask('sauce', ['connect', 'saucelabs-jasmine']);
+
 };

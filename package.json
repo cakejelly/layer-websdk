@@ -39,6 +39,7 @@
     "grunt-babel": "^6.0.0",
     "grunt-browserify": "^4.0.1",
     "grunt-cli": "^0.1.13",
+    "grunt-contrib-jasmine": "^1.0.0",
     "grunt-remove": "^0.1.0",
     "grunt-replace": "^0.11.0"
   }
