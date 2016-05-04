@@ -85,14 +85,13 @@ class DbManager extends Root {
     const request = window.indexedDB.open('LayerWebSDK_' + this.client.appId + '_' + this.client.userId, DB_VERSION);
 
     request.onerror = (evt) => {
-      console.error('Database Unable to Open: ', evt.target.error);
+      logger.error('Database Unable to Open: ', evt.target.error);
       this.tables = DbManager.DisabledState;
-    }
+    };
+
     request.onupgradeneeded = (evt) => this._onUpgradeNeeded(evt);
     request.onsuccess = (evt) => {
-      console.log("DB IS NOW OPEN");
       this.db = evt.target.result;
-      console.dir(this.db);
       this.isOpen = true;
       this.trigger('open');
 
@@ -132,11 +131,10 @@ class DbManager extends Root {
   /* istanbul ignore next */
   _onUpgradeNeeded(event) {
     const db = event.target.result;
-console.log("UPGRADE NEEDED");
+
     let completeCount = 0;
     function onComplete() {
       completeCount++;
-      console.log("COMPLETE COUNT: " + completeCount);
       if (completeCount === TABLES.length) {
         this.isOpen = true;
         this.trigger('open');
@@ -157,7 +155,7 @@ console.log("UPGRADE NEEDED");
         store.transaction.oncomplete = onComplete;
       } catch (e) {
         // Noop
-        console.error(`Failed to create object store ${tableName}`, e);
+        logger.error(`Failed to create object store ${tableName}`, e);
       }
     });
   }
@@ -778,7 +776,7 @@ console.log("UPGRADE NEEDED");
         transaction.oncomplete = callback;
       } catch (e) {
         // Noop
-        console.error('Failed to delete table', e);
+        logger.error('Failed to delete table', e);
       }
     });
   }
