@@ -12,7 +12,7 @@
  * @protected
  */
 
-const DB_VERSION = 13;
+const DB_VERSION = 14;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -132,10 +132,11 @@ class DbManager extends Root {
   /* istanbul ignore next */
   _onUpgradeNeeded(event) {
     const db = event.target.result;
-
+console.log("UPGRADE NEEDED");
     let completeCount = 0;
     function onComplete() {
       completeCount++;
+      console.log("COMPLETE COUNT: " + completeCount);
       if (completeCount === TABLES.length) {
         this.isOpen = true;
         this.trigger('open');
@@ -152,6 +153,7 @@ class DbManager extends Root {
         store.transaction.oncomplete = onComplete;
       } catch (e) {
         // Noop
+        console.error(`Failed to create object store ${tableName}`, e);
       }
     });
   }
@@ -772,6 +774,7 @@ class DbManager extends Root {
         transaction.oncomplete = callback;
       } catch (e) {
         // Noop
+        console.error('Failed to delete table', e);
       }
     });
   }
