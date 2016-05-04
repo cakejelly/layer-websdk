@@ -146,6 +146,10 @@ console.log("UPGRADE NEEDED");
     TABLES.forEach((tableName) => {
       try {
         db.deleteObjectStore(tableName);
+      } catch (e) {
+        // Noop
+      }
+      try {
         const store = db.createObjectStore(tableName, { keyPath: 'id' });
         if (tableName === 'messages') {
           store.createIndex('conversation', 'conversation', { unique: false });
