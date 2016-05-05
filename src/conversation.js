@@ -64,7 +64,6 @@ const Util = require('./client-utils');
 const Constants = require('./const');
 const Root = require('./root');
 const LayerEvent = require('./layer-event');
-const ClientRegistry = require('./client-registry');
 const logger = require('./logger');
 
 class Conversation extends Syncable {
@@ -137,16 +136,6 @@ class Conversation extends Syncable {
 
     this.participants = null;
     this.metadata = null;
-  }
-
-  /**
-   * Get the client associated with this Conversation.
-   *
-   * @method getClient
-   * @return {layer.Client}
-   */
-  getClient() {
-    return ClientRegistry.get(this.clientId);
   }
 
   /**
@@ -1233,14 +1222,6 @@ class Conversation extends Syncable {
  * @type {string[]}
  */
 Conversation.prototype.participants = null;
-
-/**
- * layer.Client that the conversation belongs to.
- *
- * Actual value of this string matches the appId.
- * @type {string}
- */
-Conversation.prototype.clientId = '';
 
 /**
  * Time that the conversation was created on the server.

@@ -10,7 +10,7 @@
  * @protected
  */
 
-const DB_VERSION = 14;
+const DB_VERSION = 15;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -213,6 +213,59 @@ class DbManager extends Root {
   writeConversations(conversations, isUpdate, callback) {
     this._writeObjects('conversations',
       this._getConversationData(conversations.filter(conversation => !conversation.isDestroyed)), isUpdate, callback);
+  }
+
+  /**
+   * Convert array of Identity instances into Identity DB Entries.
+   *
+   * @method _getIdentityData
+   * @private
+   * @param {layer.Identity[]} identities
+   * @return {Object[]} identities
+   */
+  _getIdentityData(identities) {
+    return identities.filter(identity => {
+      if (identity._fromDB) {
+        identity._fromDB = false;
+        return false;
+      } else if (identity.isLoading) {
+        return false;
+      } else {
+        return true;
+      }
+    }).map(identity => {
+      const item = {
+        id: identity.id,
+        url: identity.url,
+        user_id: identity.userId,
+        first_name: identity.firstName,
+        last_name: identity.lastName,
+        display_name: identity.displayName,
+        avatar_url: identity.avatarUrl,
+        metadata: identity.metadata,
+        public_key: identity.publicKey,
+        phone_number: identity.phoneNumber,
+        sync_state: identity.syncState,
+      };
+      return item;
+    });
+  }
+
+  /**
+   * Writes an array of Identities to the Database.
+   *
+   * There are times when you will not know if this is an Insert or Update operation;
+   * if there is uncertainy, set `isUpdate` to false, and the correct end result will
+   * still be achieved (but less efficiently).
+   *
+   * @method writeIdentities
+   * @param {layer.Identity[]} identities - Array of Identities to write
+   * @param {boolean} isUpdate - If true, then update an entry; if false, insert an entry... and if one is found to already exist, update it.
+   * @param {Function} [callback]
+   */
+  writeIdentities(identities, isUpdate, callback) {
+    this._writeObjects('identities',
+      this._getConversationData(identities.filter(identity => !identity.isDestroyed)), isUpdate, callback);
   }
 
   /**
@@ -543,6 +596,41 @@ class DbManager extends Root {
 
 
   /**
+   * Load all Identities from the database.
+   *
+   * @method loadIdentities
+   * @param {Function} callback
+   * @param {layer.Identityy[]} callback.result
+   */
+  loadIdentities(callback) {
+    this._loadAll('identities', (data) => {
+      this._loadIdentitiesResult(data, callback);
+    });
+  }
+
+  /**
+   * Assemble all LastMessages and Identityy POJOs into layer.Message and layer.Identityy instances.
+   *
+   * @method _loadIdentitiesResult
+   * @private
+   * @param {Object[]} Identities
+   * @param {Object[]} messages
+   * @param {Function} callback
+   * @param {layer.Identityy[]} callback.result
+   */
+  _loadIdentitiesResult(identities, callback) {
+
+    // Instantiate and Register each Identityy; will find any lastMessage that was registered.
+    identities.forEach(identity => this._createIdentity(identity));
+    const newData = identities
+      .map(identity => this.client.getIdentity(identity.id))
+      .filter(identity => identity);
+
+    // Return the data
+    if (callback) callback(newData);
+  }
+
+  /**
    * Instantiate and Register the Conversation from a conversation DB Entry.
    *
    * If the layer.Conversation already exists, then its presumed that whatever is in
@@ -584,6 +672,25 @@ class DbManager extends Root {
       const newMessage = this.client._createObject(message);
       newMessage.syncState = message.sync_state;
       return newMessage;
+    }
+  }
+
+  /**
+   * Instantiate and Register the Identity from an identities DB Entry.
+   *
+   * If the layer.Identity already exists, then its presumed that whatever is in
+   * javascript cache is more up to date than whats in IndexedDB cache.
+   *
+   * @method _createIdentity
+   * @param {Object} identity
+   * @returns {layer.Identity}
+   */
+  _createIdentity(identity) {
+    if (!this.client.getIdentity(identity.id)) {
+      identity._fromDB = true;
+      const newidentity = this.client._createObject(identity);
+      newidentity.syncState = identity.sync_state;
+      return newidentity;
     }
   }
 

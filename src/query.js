@@ -541,7 +541,7 @@ class Query extends Root {
   _runIdentity(pageSize) {
     // If no data, retrieve data from db cache in parallel with loading data from server
     if (this.isReset) {
-      this.client.dbManager.loadIdentity(identities => this._appendResults({ data: identities }));
+      this.client.dbManager.loadIdentities(identities => this._appendResults({ data: identities }));
     }
     this.isReset = false;
 
@@ -1256,6 +1256,15 @@ Query.Message = MESSAGE;
  * @static
  */
 Query.Announcement = ANNOUNCEMENT;
+
+/**
+ * Query for Identities.
+ *
+ * Use this value in the model property.
+ * @type {string}
+ * @static
+ */
+Query.Identity = IDENTITY;
 
 /**
  * Get data as POJOs/immutable objects.

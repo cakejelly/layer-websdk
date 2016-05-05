@@ -21,8 +21,19 @@
 const Root = require('./root');
 const { SYNC_STATE } = require('./const');
 const LayerError = require('./layer-error');
+const ClientRegistry = require('./client-registry');
 
 class Syncable extends Root {
+
+  /**
+   * Get the client associated with this Conversation.
+   *
+   * @method getClient
+   * @return {layer.Client}
+   */
+  getClient() {
+    return ClientRegistry.get(this.clientId);
+  }
 
   static load(id, client) {
     if (!client || !(client instanceof Root)) throw new Error(LayerError.dictionary.clientMissing);
@@ -50,8 +61,8 @@ class Syncable extends Root {
    */
   _load() {
     this.syncState = SYNC_STATE.LOADING;
-    this._xhr({
-      url: '',
+    this.getClient().xhr({
+      url: this.url,
       method: 'GET',
       sync: false,
     }, result => this._loadResult(result));
@@ -173,6 +184,13 @@ class Syncable extends Root {
   }
 }
 
+/**
+ * layer.Client that the object belongs to.
+ *
+ * Actual value of this string matches the appId.
+ * @type {string}
+ */
+Syncable.prototype.clientId = '';
 
 /**
  * The current sync state of this object.
