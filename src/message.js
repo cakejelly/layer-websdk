@@ -781,12 +781,12 @@ class Message extends Syncable {
 
     if (message.sender.user_id) {
       message.sender.id = 'layer:///identities/' + message.sender.user_id;
-      sender = client.getIdentity(message.sender.user_id);
+      sender = client.getIdentity(message.sender.id);
     } else {
       message.sender.id = 'layer:///serviceidentities/' + message.sender.name;
-      sender = client.getIdentityForService(message.sender.name);
+      sender = client.getServiceIdentity(message.sender.id);
     }
-    if (!sender) sender = client._createObject(this.sender);
+    if (!sender) sender = client._createObject(message.sender);
     this.sender = sender;
 
     this._setSynced();

@@ -250,7 +250,6 @@ class ClientAuthenticator extends Root {
     if (!this.isTrustedDevice || this._isPersistedSessionsDisabled() || this._hasUserIdChanged(userId)) {
       this._clearStoredData();
     }
-    this.onlineManager.start();
 
     this.userId = userId;
     this.isConnected = true;
@@ -415,9 +414,7 @@ class ClientAuthenticator extends Root {
       }
     }
 
-    this.isAuthenticated = true;
-    this.trigger('authenticated');
-    this._clientReady();
+    this._clientAuthenticated();
   }
 
   /**
@@ -448,26 +445,16 @@ class ClientAuthenticator extends Root {
   _sessionTokenRestored() {
     this.isConnected = true;
     this.trigger('connected');
-    this.onlineManager.start();
-    this.isAuthenticated = true;
-    this.trigger('authenticated');
-    this._clientReady();
+    this._clientAuthenticated();
   }
 
-  /**
-   * Called to flag the client as ready for action.
-   *
-   * This method is called after authenication AND
-   * after initial conversations have been loaded.
-   *
-   * @method _clientReady
-   * @private
-   * @fires ready
-   */
-  _clientReady() {
+  _clientAuthenticated() {
+    this.isAuthenticated = true;
+    this.trigger('authenticated');
+
     if (!this.persistenceFeatures || !this.isTrustedDevice) {
       this.persistenceFeatures = {
-        identity: this.isTrustedDevice,
+        identities: this.isTrustedDevice,
         conversations: this.isTrustedDevice,
         messages: this.isTrustedDevice,
         syncQueue: this.isTrustedDevice,
@@ -481,6 +468,24 @@ class ClientAuthenticator extends Root {
       });
     }
 
+    if (this.isTrustedDevice) {
+      this.dbManager.onOpen(() => this._clientReady());
+    } else {
+      this._clientReady();
+    }
+  }
+
+  /**
+   * Called to flag the client as ready for action.
+   *
+   * This method is called after authenication AND
+   * after initial conversations have been loaded.
+   *
+   * @method _clientReady
+   * @private
+   * @fires ready
+   */
+  _clientReady() {
     if (!this.isReady) {
       this.isReady = true;
       this.trigger('ready');

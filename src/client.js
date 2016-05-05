@@ -85,7 +85,7 @@ const LayerError = require('./layer-error');
 const Syncable = require('./syncable');
 const Message = require('./message');
 const Announcement = require('./announcement');
-const Identity = require('./identity');
+const { Identity, UserIdentity, ServiceIdentity } = require('./identity');
 const TypingIndicatorListener = require('./typing-indicators/typing-indicator-listener');
 const Util = require('./client-utils');
 const Root = require('./root');
@@ -142,16 +142,17 @@ class Client extends ClientAuth {
    */
   _clientReady() {
     if (!this.user) {
-      // TODO: This should account for persistence!
-      const user = Identity.load(this.userid);
+      // TODO: This should account for persistence; DBManager is not yet listening at this point
+      const user = UserIdentity.load('layer:///identities/' + this.userId, this);
       user.sessionOwner = true;
       user.on('identities:loaded', () => {
         this.user = user;
         this._clientReady();
       });
-      this.user.on('identities:loaded-error', () => setTimeout(() => this._clientReady(), 2000));
+      user.on('identities:loaded-error', () => setTimeout(() => this._clientReady(), 2000));
+      this.user = user;
     } else if (this.user.isSynced()) {
-      this.super();
+      super._clientReady();
     }
   }
 
@@ -507,7 +508,7 @@ class Client extends ClientAuth {
     }
   }
 
-  getIdentityForService(id) {
+  getServiceIdentity(id) {
     if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
     if (this._serviceIdentitiesHash[id]) {
       return this._serviceIdentitiesHash[id];
@@ -526,13 +527,20 @@ class Client extends ClientAuth {
    */
   _addIdentity(identity) {
     const id = identity.id;
-    if (!this._identitiesHash[id]) {
-      // Register the Identity
-      this._identitiesHash[id] = identity;
-
-      // Make sure the client is set so that the next event bubbles up
-      if (identity.clientId !== this.appId) identity.clientId = this.appId;
-      this._triggerAsync('identities:add', { identities: [identity] });
+    switch (Util.typeFromID(id)) {
+      case 'identities':
+        if (!this._identitiesHash[id]) {
+          // Register the Identity
+          this._identitiesHash[id] = identity;
+          this._triggerAsync('identities:add', { identities: [identity] });
+        }
+        break;
+      case 'serviceidentities':
+        if (!this._serviceIdentitiesHash[id]) {
+          // Register the Identity
+          this._serviceIdentitiesHash[id] = identity;
+        }
+        break;
     }
     return this;
   }
@@ -587,7 +595,7 @@ class Client extends ClientAuth {
       case 'identities':
         return this.getIdentity(id);
       case 'serviceidentities':
-        return this.getIdentityForService(id);
+        return this.getServiceIdentity(id);
     }
   }
 
@@ -614,8 +622,9 @@ class Client extends ClientAuth {
         case 'conversations':
           return Conversation._createFromServer(obj, this);
         case 'identities':
+          return UserIdentity._createFromServer(obj, this);
         case 'serviceidentities':
-          return Identity._createFromServer(obj, this);
+          return ServiceIdentity._createFromServer(obj, this);
       }
     }
   }
@@ -1563,6 +1572,7 @@ Client._supportedEvents = [
   'identities:add',
 
   'identities:remove',
+  'identities:delete',
 
 
   /**
