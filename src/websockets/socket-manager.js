@@ -182,8 +182,10 @@ class SocketManager extends Root {
     try {
       this.isOpen = false;
       this._removeSocketEvents();
-      this._socket.close();
-      this._socket = null;
+      if (this._socket) {
+        this._socket.close();
+        this._socket = null;
+      }
     } catch (e) {
       // No-op
     }

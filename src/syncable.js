@@ -22,8 +22,13 @@ const Root = require('./root');
 const { SYNC_STATE } = require('./const');
 const LayerError = require('./layer-error');
 const ClientRegistry = require('./client-registry');
+const Constants = require('./const');
 
 class Syncable extends Root {
+  constructor(options = {}) {
+    super(options);
+    this.localCreatedAt = new Date();
+  }
 
   /**
    * Get the client associated with this Conversation.
@@ -46,9 +51,70 @@ class Syncable extends Root {
 
     const ConstructorClass = Syncable.subclasses.filter(aClass => obj.id.indexOf(aClass.prefixUUID) === 0)[0];
     const syncItem = new ConstructorClass(obj);
+    const typeName = ConstructorClass.eventPrefix;
 
-    syncItem._load();
+    if (typeName) {
+      client.dbManager.getObjects(typeName, [id], (items) => {
+        if (items.length) {
+          syncItem._populateFromServer(items[0]);
+          syncItem.trigger(typeName + ':loaded');
+        } else {
+          syncItem._load();
+        }
+      });
+    } else {
+      syncItem._load();
+    }
     return syncItem;
+  }
+
+  /**
+   * Any xhr method called on this Object uses the Object's url.
+   *
+   * For more info on xhr method parameters see {@link layer.ClientAuthenticator#xhr}
+   *
+   * @method _xhr
+   * @protected
+   * @return {layer.Syncable} this
+   */
+  _xhr(options, callback) {
+    // initialize
+    if (!options.url) options.url = '';
+    const client = this.getClient();
+
+    // Validatation
+    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
+    if (!client) throw new Error(LayerError.dictionary.clientMissing);
+    if (!this.constructor.enableOpsIfNew && options.method !== 'POST' && this.syncState === Constants.SYNC_STATE.NEW) return this;
+
+    if (!options.url.match(/^http(s):\/\//)) {
+      if (options.url && !options.url.match(/^(\/|\?)/)) options.url = '/' + options.url;
+      if (!options.sync) options.url = this.url + options.url;
+    }
+
+    // Setup sync structure
+    options.sync = this._setupSyncObject(options.sync);
+
+    const isGET = !options.method || options.method === 'GET';
+    if (!isGET) {
+      this._setSyncing();
+    }
+
+    client.xhr(options, (result) => {
+      if (result.success && !isGET && !this.isDestroyed) {
+        this._setSynced();
+      }
+      if (callback) callback(result);
+    });
+    return this;
+  }
+
+  _setupSyncObject(sync) {
+    if (sync !== false) {
+      if (!sync) sync = {};
+      if (!sync.target) sync.target = this.id;
+    }
+    return sync;
   }
 
   /**
@@ -61,8 +127,7 @@ class Syncable extends Root {
    */
   _load() {
     this.syncState = SYNC_STATE.LOADING;
-    this.getClient().xhr({
-      url: this.url,
+    this._xhr({
       method: 'GET',
       sync: false,
     }, result => this._loadResult(result));
@@ -94,6 +159,34 @@ class Syncable extends Root {
   _loaded(data) {
 
   }
+
+  /**
+   * A websocket event has been received specifying that this resource
+   * has been deleted.
+   *
+   * @method
+   * @protected
+   * @param {Object} data
+   */
+  _handleWebsocketDelete(data) {
+    this._deleted();
+    this.destroy();
+  }
+
+  /**
+   * The Object has been deleted.
+   *
+   * Called from WebsocketManager and from layer.Conversation.delete();
+   *
+   * Destroy must be called separately, and handles most cleanup.
+   *
+   * @method _deleted
+   * @protected
+   */
+  _deleted() {
+    this.trigger(this.constructor.eventPrefix + ':delete');
+  }
+
 
   /**
    * Object is queued for syncing with the server.
@@ -185,6 +278,27 @@ class Syncable extends Root {
 }
 
 /**
+ * Unique identifier.
+ *
+ * @type {string}
+ */
+Syncable.prototype.id = '';
+
+/**
+ * URL to access the object on the server.
+ *
+ * @type {string}
+ */
+Syncable.prototype.url = '';
+
+/**
+ * The time that this client created this instance.
+ * @type {Date}
+ */
+Syncable.prototype.localCreatedAt = null;
+
+
+/**
  * layer.Client that the object belongs to.
  *
  * Actual value of this string matches the appId.
@@ -226,6 +340,8 @@ Syncable.prototype._syncCounter = 0;
  * Prefix to use when triggering events
  */
 Syncable.eventPrefix = '';
+
+Syncable.enableOpsIfNew = false;
 
 /**
  * Is the object loading from the server?

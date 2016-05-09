@@ -163,7 +163,6 @@ class Message extends Syncable {
     }
 
     if (!this.parts) this.parts = [];
-    this.localCreatedAt = new Date();
 
     this._disableEvents = true;
     if (!options.fromServer) this.recipientStatus = {};
@@ -705,20 +704,6 @@ class Message extends Syncable {
   }
 
   /**
-   * The Message has been deleted.
-   *
-   * Called from layer.Websockets.ChangeManager and from layer.Message.delete();
-   *
-   * Destroy must be called separately, and handles most cleanup.
-   *
-   * @method _deleted
-   * @protected
-   */
-  _deleted() {
-    this.trigger('messages:delete');
-  }
-
-  /**
    * Remove this Message from the system.
    *
    * This will deregister the Message, remove all events
@@ -826,43 +811,13 @@ class Message extends Syncable {
     this._inLayerParser = true;
   }
 
-
-  /**
-   * Any xhr method called on this message uses the message's url.
-   *
-   * For more info on xhr method parameters see {@link layer.ClientAuthenticator#xhr}
-   *
-   * @method _xhr
-   * @protected
-   * @return {layer.Message} this
-   */
-  _xhr(options, callback) {
-    // initialize
-    let inUrl = options.url;
-    const client = this.getClient();
-
-    // Validatation
-    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
-    if (!('url' in options)) throw new Error(LayerError.dictionary.urlRequired);
-
-    if (inUrl && !inUrl.match(/^(\/|\?)/)) options.url = inUrl = '/' + options.url;
-    if (!options.sync) options.url = this.url + options.url;
-
-    // Setup sync structure
-    options.sync = this._setupSyncObject(options.sync);
-
-    client.xhr(options, callback);
-    return this;
-  }
-
   _getUrl(url) {
     return this.url + (url || '');
   }
 
   _setupSyncObject(sync) {
     if (sync !== false) {
-      if (!sync) sync = {};
-      if (!sync.target) sync.target = this.id;
+      super._setupSyncObject(sync);
       if (!sync.depends) {
         sync.depends = [this.conversationId];
       } else if (sync.depends.indexOf(this.id) === -1) {
@@ -999,21 +954,6 @@ Message.prototype.conversationId = '';
 Message.prototype.parts = null;
 
 /**
- * Message Identifier.
- *
- * This value is shared by all participants and devices.
- *
- * @type {String}
- */
-Message.prototype.id = '';
-
-/**
- * URL to the server endpoint for operating on the message.
- * @type {String}
- */
-Message.prototype.url = '';
-
-/**
  * Time that the message was sent.
  * @type {Date}
  */
@@ -1134,12 +1074,6 @@ Message.prototype.readStatus = Constants.RECIPIENT_STATE.NONE;
  * @type {String}
  */
 Message.prototype.deliveryStatus = Constants.RECIPIENT_STATE.NONE;
-
-/**
- * The time that this client created this instance.
- * @type {Date}
- */
-Message.prototype.localCreatedAt = null;
 
 Message.prototype._toObject = null;
 

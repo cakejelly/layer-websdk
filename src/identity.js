@@ -1,24 +1,34 @@
-/*
-1. As part of initialization, load the authenticated user’s full Identity record so that the Client knows more than just the `userId` of its user. Might be nice to add this to the response to `POST /sessions` but this works. Also loads it from DB if available. DONE.
-2. Any time we get a `message.sender` object see if we have an Identity for that sender, and if not create one using the data provided by `message.sender`.  This allows all Messages that share a sender to share a single object. DONE
-3. Sharing a single object also means websocket updates to Identity can be available to everyone with the pointer to that Identity
-4. I’m creating an Identity class, with UserIdentity and ServiceIdentity as subclasses; Identity will have `displayName`; UserIdentity will have `first_name`, `last_name`, etc…; ServiceIdentity will have `name` (Admin, Moderator, etc…).
-5. In creating UserIdentity instances from `message.sender` I’m generating an `id` from the `user_id` using `layer:///identities/` + user_id
-6. In creating ServiceIdentity instances from `message.sender` I’m generating an `id` from the `name` using `layer:///serviceidentities/` + name
-7. The Query API supports querying and paging through Identities
-8. Any full Identity loaded via Query API will also update the Client’s cache of Identities, and flesh out any missing fields.
-9. Conversation.participants I don’t yet have a plan for; initial thoughts:
-A. Conversation.participants remains an array of `user_id` strings
-B. Add a method for fetching all Identities for the `participants`; this will gather all cached Identities, and load any missing Identities from the server.  We may have Conversations where we haven’t yet loaded any Messages and therefore don’t have a pool of `sender` values populated with participant Identities.
-10. When available, persistence should smooth a lot of this out.
+// TODO: Integrate/Remove User object
+/**
+ * The Identity class represents an Identity of a participant in a Conversation or sender of a Message in a Conversation.
+ *
+ * Identities are created by the System, never directly by apps.
+ *
+ * @class layer.Identity
+ * @extends layer.Syncable
+ */
 
-* Generalize the UserIdentity.load method
-*/
+/*
+ * How Identities fit into the system:
+ *
+ * 1. As part of initialization, load the authenticated user’s full Identity record so that the Client knows more than just the `userId` of its user.
+ *    client.user = <UserIdentity>
+ * 2. Any time we get a Basic Identity via `message.sender` or Conversations, see if we have an Identity for that sender,
+ *    and if not create one using the Basic Identity.  There should never be a duplicate Identity.
+ * 3. Websocket CHANGE events will update Identity objects, as well as add new Full Identities, and downgrade Full Identities to Basic Identities.
+ * 4. There are two types of Identities: UserIdentity and ServiceIdentity.  Both will have `displayName`;
+ *    UserIdentity will have `first_name`, `last_name`, etc…; ServiceIdentity will have `name` (Admin, Moderator, etc…).
+ * 5. The Query API supports querying and paging through Identities
+ * 6. The Query API loads Full Identities; these results will update the client._identitiesHash;
+ *    upgrading Basic Identities if they match, and adding new Identities if they don't.
+ * 7. DbManager will persist only UserIdentities, and only those that are Full Identities.  Basic Identities will be written
+ *    to the Messages and Conversations tables anyways as part of those larger objects.
+ * 8. API For explicit follows/unfollows
+ */
 
 const Syncable = require('./syncable');
 const Root = require('./root');
 const Constants = require('./const');
-const LayerError = require('./layer-error');
 
 class Identity extends Syncable {
   constructor(options = {}) {
@@ -39,16 +49,43 @@ class Identity extends Syncable {
       this._populateFromServer(options.fromServer);
     }
 
-    this.localCreatedAt = new Date();
     this.isInitializing = false;
+  }
+
+  destroy() {
+    const client = this.getClient();
+    if (client) client._removeIdentity(this);
+    super.destroy();
   }
 }
 
-Identity.prototype.id = '';
+/**
+ * Display name for the User or System Identity.
+ * @type {string}
+ */
 Identity.prototype.displayName = '';
-Identity.prototype.localCreatedAt = null;
+
+/**
+ * The Identity matching `layer.Client.user` will have this be true.
+ *
+ * All other Identities will have this as false.
+ * @type {boolean}
+ */
 Identity.prototype.sessionOwner = false;
+
+/**
+ * ID of the Client this Identity is associated with.
+ * @type {string}
+ */
 Identity.prototype.clientId = '';
+
+/**
+ * Is this a Full Identity or Basic Identity?
+ *
+ * Note that Service Identities are always considered to be Basic.
+ * @type {boolean}
+ */
+Identity.prototype.isFullIdentity = false;
 
 Identity.inObjectIgnore = Root.inObjectIgnore;
 
@@ -56,8 +93,22 @@ Identity.bubbleEventParent = 'getClient';
 
 Root.initClass.apply(Identity, [Identity, 'Identity']);
 
-
+/**
+ * The most common type of Identity is the UserIdentity, representing
+ * a user of your application, able to be a full participant of your Conversations,
+ * and able, with a SessionToken to create new Conversations with other Users.
+ *
+ * These are only created by the WebSDK for you, never created by you directly.
+ *
+ * @class layer.UserIdentity
+ * @extends layer.Identity
+ */
 class UserIdentity extends Identity {
+  constructor(options) {
+    super(options);
+    if (!options.fromServer && !options.url) this.url = `${this.getClient().url}/identities/${this.userId}`;
+  }
+
   /**
    * Populates this instance using server-data.
    *
@@ -76,27 +127,133 @@ class UserIdentity extends Identity {
 
     this._setSynced();
 
-    this.id = identity.id;
-    this.url = identity.url;
     this.userId = identity.user_id;
-    this.avatarUrl = identity.avatar_url;
-    this.displayName = identity.display_name;
-    this.emailAddress = identity.email_address;
-    this.lastName = identity.last_name;
-    this.firstName = identity.first_name;
-    this.metadata = identity.metadata;
-    this.publicKey = identity.public_key;
-    this.phoneNumber = identity.phone_number;
+
+    this._updateValue('avatarUrl', identity.avatar_url);
+    this._updateValue('displayName', identity.display_name);
+
+    const isFullIdentity = 'metadata' in identity;
+
+    // Handle Full Identity vs Basic Identity
+    if (isFullIdentity) {
+      this.url = identity.url;
+
+      this._updateValue('emailAddress', identity.email_address);
+      this._updateValue('lastName', identity.last_name);
+      this._updateValue('firstName', identity.first_name);
+      this._updateValue('metadata', identity.metadata);
+      this._updateValue('publicKey', identity.public_key);
+      this._updateValue('phoneNumber', identity.phone_number);
+      this.isFullIdentity = true;
+    }
+
+    if (!this.url) {
+      this.url = this.getClient().url + this.id.substring(8);
+    }
 
     client._addIdentity(this);
     this._disableEvents = false;
+
+    // See if we have the Full Identity Object in database
+    if (!this.isFullIdentity) {
+      client.dbManager.getObjects('identities', [this.id], (result) => {
+        if (result.length) this._populateFromServer(result[0]);
+      });
+    }
   }
 
+  /**
+   * Update the property; trigger a change event, IF the value has changed.
+   *
+   * @method _updateValue
+   * @private
+   * @param {string} key - Property name
+   * @param {Mixed} value - Property value
+   */
+  _updateValue(key, value) {
+    if (this[key] !== value) {
+      if (!this.isInitializing) {
+        this.trigger('identities:change', {
+          property: key,
+          oldValue: this[key],
+          newValue: value,
+        });
+      }
+      this[key] = value;
+    }
+  }
 
+  /**
+   * Follow this User.
+   *
+   * Following a user grants access to their Full Identity,
+   * as well as websocket events that update the Identity.
+   * @method follow
+   */
+  follow() {
+    if (this.isFullIdentity) return;
+    this._xhr({
+      method: 'PUT',
+      url: this.url.replace(/identities/, 'following'),
+      syncable: {},
+    }, (result) => {
+      if (result.success) this._load();
+    });
+  }
+
+  /**
+   * Unfollow this User.
+   *
+   * Unfollowing the user will reduce your access to only having their Basic Identity,
+   * and this Basic Identity will only show up when a relevant Message or Conversation has been loaded.
+   *
+   * Websocket change notifications for this user will not arrive.
+   *
+   * @method unfollow
+   */
+  unfollow() {
+    this._xhr({
+      url: this.url.replace(/identities/, 'following'),
+      method: 'DELETE',
+      syncable: {},
+    });
+  }
+
+  /**
+   * After a successful call to _load(), register the Identity.
+   *
+   * @method _loaded
+   * @protected
+   * @param {Object} data - Identity data loaded from the server
+   */
   _loaded(data) {
     this.getClient()._addIdentity(this);
   }
 
+  /**
+   * Handle a Websocket DELETE event received from the server.
+   *
+   * A DELETE event means we have unfollowed this user; and should downgrade to a Basic Identity.
+   *
+   * @method _handleWebsocketDelete
+   * @protected
+   * @param {Object} data - Deletion parameters; typically null in this case.
+  */
+  // Turn a Full Identity into a Basic Identity and delete the Full Identity from the database
+  _handleWebsocketDelete(data) {
+    this.getClient().dbManager.deleteObjects('identities', [this]);
+    ['emailAddress', 'phoneNumber', 'metadata', 'publicKey', 'isFullIdentity'].forEach(key => delete this[key]);
+  }
+
+  /**
+   * Create a new Identity based on a Server description of the user.
+   *
+   * @method _createFromServer
+   * @static
+   * @param {Object} identity - Server Identity Object
+   * @param {layer.Client} client
+   * @returns {layer.UserIdentity}
+   */
   static _createFromServer(identity, client) {
     return new UserIdentity({
       client,
@@ -104,38 +261,72 @@ class UserIdentity extends Identity {
       _fromDB: identity._fromDB,
     });
   }
-
-  // TODO: Generalize this to all Syncable classes
-  static load(id, client) {
-    if (!client || !(client instanceof Root)) throw new Error(LayerError.dictionary.clientMissing);
-    const obj = {
-      id,
-      url: client.url + id.substring(8),
-      clientId: client.appId,
-    };
-    const item = new UserIdentity(obj);
-
-    client.dbManager.getObjects('identities', [id], (identities) => {
-      if (identities.length) {
-        item._populateFromServer(identities[0]);
-        item.trigger('identities:loaded');
-      } else {
-        item._load();
-      }
-    });
-
-    return item;
-  }
 }
 
-UserIdentity.prototype.url = '';
+/**
+ * Unique ID for this User.
+ * @type {string}
+ */
 UserIdentity.prototype.userId = '';
+
+/**
+ * Optional URL for the user's icon.
+ * @type {string}
+ */
 UserIdentity.prototype.avatarUrl = '';
+
+/**
+ * Optional first name for this user.
+ *
+ * Full Identities Only.
+ *
+ * @type {string}
+ */
 UserIdentity.prototype.firstName = '';
+
+/**
+ * Optional last name for this user.
+ *
+ * Full Identities Only.
+ *
+ * @type {string}
+ */
 UserIdentity.prototype.lastName = '';
+
+/**
+ * Optional email address for this user.
+ *
+ * Full Identities Only.
+ *
+ * @type {string}
+ */
 UserIdentity.prototype.emailAddress = '';
+
+/**
+ * Optional phone number for this user.
+ *
+ * Full Identities Only.
+ *
+ * @type {string}
+ */
 UserIdentity.prototype.phoneNumber = '';
+
+/**
+ * Optional metadata for this user.
+ *
+ * Full Identities Only.
+ *
+ * @type {object}
+ */
 UserIdentity.prototype.metadata = null;
+
+/**
+ * Optional public key for encrypting message text for this user.
+ *
+ * Full Identities Only.
+ *
+ * @type {string}
+ */
 UserIdentity.prototype.publicKey = '';
 
 UserIdentity.inObjectIgnore = Identity.inObjectIgnore;
@@ -149,10 +340,22 @@ UserIdentity._supportedEvents = [
 
 UserIdentity.eventPrefix = 'identities';
 UserIdentity.prefixUUID = 'layer:///identities/';
+UserIdentity.enableOpsIfNew = true;
 
 Root.initClass.apply(UserIdentity, [UserIdentity, 'UserIdentity']);
 Syncable.subclasses.push(UserIdentity);
 
+/**
+ * A less common type of Identity is the ServiceIdentity.
+ * This represents a Service Message such as is posted by your service,
+ * using some custom name, but sent, not as a Participant of a Conversation, but rather as
+ * a System Message.  Bots are common examples of this.  An Administrator might post an announcement
+ * this way.  A service posting new news and events might simply post as `News Bot`, which is not
+ * a participant, just a named service.
+ *
+ * @class layer.ServiceIdentity
+ * @extends layer.Identity
+ */
 class ServiceIdentity extends Identity {
   /**
    * Populates this instance using server-data.
@@ -173,7 +376,6 @@ class ServiceIdentity extends Identity {
     this._setSynced();
 
     this.id = identity.id;
-    this.url = identity.url;
     this.name = identity.name;
     this.displayName = identity.name;
 
@@ -181,6 +383,11 @@ class ServiceIdentity extends Identity {
     this._disableEvents = false;
   }
 
+  /**
+   * Create a layer.ServiceIdentity from the Server's Identity Object.
+   *
+   * Input Identity Object must have a `name` field.
+   */
   static _createFromServer(identity, client) {
     return new ServiceIdentity({
       client,
@@ -190,6 +397,11 @@ class ServiceIdentity extends Identity {
   }
 }
 
+/**
+ * Name of the service sending Messages.
+ *
+ * @type {string}
+ */
 ServiceIdentity.prototype.name = '';
 
 ServiceIdentity._supportedEvents = [
