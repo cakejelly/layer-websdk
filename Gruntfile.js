@@ -129,7 +129,6 @@ module.exports = function (grunt) {
           "lib/websockets/socket-manager.js": "src/websockets/socket-manager.js",
           "lib/websockets/request-manager.js": "src/websockets/request-manager.js",
           "lib/websockets/change-manager.js": "src/websockets/change-manager.js",
-          "lib/user.js": "src/user.js",
           "lib/layer-error.js": "src/layer-error.js",
           "lib/layer-event.js": "src/layer-event.js",
           "lib/client-registry.js": "src/client-registry.js",
@@ -194,19 +193,7 @@ module.exports = function (grunt) {
         mangle: {
           except: [
             "layer",
-            "Conversation",
-            "Message",
-            "MessagePart",
-            "Client",
-            "LayerEvent",
-            "LayerError",
-            "Content",
-            "OnlineStateManager",
-            "Query",
-            "SyncEvent",
-            "SyncManager",
-            "User",
-            "WebsocketManager"]
+            "Client"]
         },
         sourceMap: false,
         screwIE8: true
@@ -242,7 +229,7 @@ module.exports = function (grunt) {
           template: require('grunt-template-jasmine-istanbul'),
           templateOptions: {
             coverage: 'coverage/data/coverage.json',
-            ignoreFiles: ["coverage/index.js", "lib/user.js"],
+            ignoreFiles: ["coverage/index.js"],
             report: [{ type: "text", options: { dir: 'coverage/report/text' } },
               { type: "html", options: { dir: 'coverage/report' } }]
 

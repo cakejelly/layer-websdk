@@ -114,8 +114,6 @@ class Conversation extends Syncable {
       this.participants.push(client.userId);
     }
 
-    this.localCreatedAt = new Date();
-
     if (client) client._addConversation(this);
     this.isInitializing = false;
   }
@@ -607,18 +605,12 @@ class Conversation extends Syncable {
     this.destroy();
   }
 
-  /**
-   * The Conversation has been deleted.
-   *
-   * Called from WebsocketManager and from layer.Conversation.delete();
-   *
-   * Destroy must be called separately, and handles most cleanup.
-   *
-   * @method _deleted
-   * @protected
-   */
-  _deleted() {
-    this.trigger('conversations:delete');
+  _handleWebsocketDelete(data) {
+    if (data.mode === 'my_devices' && data.from_position) {
+      this.client._purgeMessagesByPosition(this.id, data.from_position);
+    } else {
+      this.super();
+    }
   }
 
   /**
@@ -851,49 +843,6 @@ class Conversation extends Syncable {
       },
     }, result => {
       if (!result.success) this._load();
-    });
-
-    return this;
-  }
-
-
-  /**
-   * Any xhr method called on this conversation uses the conversation's url.
-   *
-   * For details on parameters see {@link layer.ClientAuthenticator#xhr}
-   *
-   * @method _xhr
-   * @protected
-   * @return {layer.Conversation} this
-   */
-  _xhr(args, callback) {
-    const client = this.getClient();
-
-    // Validation
-    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
-    if (!client) throw new Error(LayerError.dictionary.clientMissing);
-    if (!('url' in args)) throw new Error(LayerError.dictionary.urlRequired);
-    if (args.method !== 'POST' && this.syncState === Constants.SYNC_STATE.NEW) return this;
-
-    if (args.sync !== false) {
-      if (!args.sync) args.sync = {};
-      if (!args.sync.target) {
-        args.sync.target = this.id;
-      }
-    }
-
-    if (args.url && !args.url.match(/^(\/|\?)/)) args.url = '/' + args.url;
-    if (!args.sync) args.url = this.url + args.url;
-
-    if (args.method && args.method !== 'GET') {
-      this._setSyncing();
-    }
-
-    client.xhr(args, (result) => {
-      if (args.method && args.method !== 'GET' && !this.isDestroyed) {
-        this._setSynced();
-      }
-      if (callback) callback(result);
     });
 
     return this;
@@ -1231,20 +1180,6 @@ Conversation.prototype.participants = null;
 Conversation.prototype.createdAt = null;
 
 /**
- * Conversation unique identifier.
- *
- * @type {string}
- */
-Conversation.prototype.id = '';
-
-/**
- * URL to access the conversation on the server.
- *
- * @type {string}
- */
-Conversation.prototype.url = '';
-
-/**
  * Number of unread messages in the conversation.
  *
  * @type {number}
@@ -1271,12 +1206,6 @@ Conversation.prototype.distinct = true;
  */
 Conversation.prototype.metadata = null;
 
-/**
- * Time that the conversation object was instantiated
- * in the current client.
- * @type {Date}
- */
-Conversation.prototype.localCreatedAt = null;
 
 /**
  * The authenticated user is a current participant in this Conversation.

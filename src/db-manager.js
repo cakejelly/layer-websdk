@@ -265,7 +265,7 @@ class DbManager extends Root {
    */
   writeIdentities(identities, isUpdate, callback) {
     this._writeObjects('identities',
-      this._getConversationData(identities.filter(identity => !identity.isDestroyed)), isUpdate, callback);
+      this._getIdentityData(identities.filter(identity => !identity.isDestroyed && identity.isFullIdentity)), isUpdate, callback);
   }
 
   /**
@@ -309,6 +309,8 @@ class DbManager extends Root {
       sender: {
         name: message.sender.name,
         user_id: message.sender.userId,
+        display_name: message.sender.displayName,
+        avatar_url: message.sender.avatarUrl,
       },
       recipient_status: message.recipientStatus,
       sent_at: getDate(message.sentAt),
@@ -382,64 +384,6 @@ class DbManager extends Root {
 
 
   /**
-   * Convert array of Identity instances into Identity DB Entries.
-   *
-   * A Identity DB entry looks a lot like the server representation, but
-   * includes a sync_state property, and `last_message` contains a message ID not
-   * a Message object.
-   *
-   * @method _getIdentityData
-   * @private
-   * @param {layer.Identity[]} identities
-   * @return {Object[]} identities
-   */
-  _getIdentityData(identities) {
-    return identities.filter(identity => {
-      if (identity._fromDB) {
-        identity._fromDB = false;
-        return false;
-      } else if (identity.isLoading) {
-        return false;
-      } else {
-        return true;
-      }
-    }).map(identity => {
-      const item = {
-        id: identity.id,
-        url: identity.url,
-        avatar_url: identity.avatarUrl,
-        display_name: identity.displayName,
-        first_name: identity.firstName,
-        last_name: identity.lastName,
-        phone_number: identity.phoneNumber,
-        email_address: identity.emailAddress,
-        metadata: identity.metadata,
-        public_key: identity.publicKey,
-        user_id: identity.userId,
-        sync_state: identity.syncState,
-      };
-      return item;
-    });
-  }
-
-  /**
-   * Writes an array of Identities to the Database.
-   *
-   * There are times when you will not know if this is an Insert or Update operation;
-   * if there is uncertainy, set `isUpdate` to false, and the correct end result will
-   * still be achieved (but less efficiently).
-   *
-   * @method writeIdentities
-   * @param {layer.Identity[]} identities - Array of Identities to write
-   * @param {boolean} isUpdate - If true, then update an entry; if false, insert an entry... and if one is found to already exist, update it.
-   * @param {Function} [callback]
-   */
-  writeIdentities(identities, isUpdate, callback) {
-    this._writeObjects('identities',
-      this._getIdentityData(identities.filter(identity => !identity.isDestroyed)), isUpdate, callback);
-  }
-
-  /**
    * Write an array of data to the specified Database table.
    *
    * @method _writeObjects
@@ -450,7 +394,6 @@ class DbManager extends Root {
    * @protected
    */
   _writeObjects(tableName, data, isUpdate, callback) {
-
     // Just quit if no data to write
     if (!data.length) {
       if (callback) callback();
@@ -619,7 +562,6 @@ class DbManager extends Root {
    * @param {layer.Identityy[]} callback.result
    */
   _loadIdentitiesResult(identities, callback) {
-
     // Instantiate and Register each Identityy; will find any lastMessage that was registered.
     identities.forEach(identity => this._createIdentity(identity));
     const newData = identities
@@ -749,7 +691,6 @@ class DbManager extends Root {
    * @param {layer.SyncEvent[]} callback.result
    */
   _loadSyncEventResults(syncEvents, callback) {
-
     // If the target is present in the sync event, but does not exist in the system,
     // do NOT attempt to instantiate this event... unless its a DELETE operation.
     const newData = syncEvents

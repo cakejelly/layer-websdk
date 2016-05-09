@@ -73,11 +73,8 @@ class OnlineStateManager extends Root {
     logger.info('OnlineStateManager: start');
     this.isClientReady = true;
     this.isOnline = true;
-    if (!this._firstStart) {
-      this.trigger('connected', { offlineDuration: 0 });
-    }
-    this._firstStart = false;
-    this._scheduleNextOnlineCheck();
+
+    this.checkOnlineStatus();
   }
 
   /**
@@ -322,12 +319,6 @@ OnlineStateManager.prototype.isOnline = false;
  * @type {Number}
  */
 OnlineStateManager.prototype.onlineCheckId = 0;
-
-/**
- * True until the first time start() is called.
- * @type {boolean}
- */
-OnlineStateManager.prototype._firstStart = true;
 
 /**
  * If we are online, how often do we need to ping to verify we are still online.

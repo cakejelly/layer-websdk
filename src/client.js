@@ -110,12 +110,6 @@ class Client extends ClientAuth {
     this._serviceIdentitiesHash = {};
     this._scheduleCheckAndPurgeCacheItems = [];
 
-    if (!options.users) {
-      this.users = [];
-    } else {
-      this.__updateUsers(this.users);
-    }
-
     this._initComponents();
 
     this.on('online', this._connectionRestored.bind(this));
@@ -562,11 +556,62 @@ class Client extends ClientAuth {
     // Insure we do not get any events, such as message:remove
     identity.off(null, null, this);
 
-    if (this._identitiesHash[identity.id]) {
-      delete this._identitiesHash[identity.id];
-      this._triggerAsync('identitys:remove', { identitys: [identity] });
+    const id = identity.id;
+    switch (Util.typeFromID(id)) {
+      case 'identities':
+        if (this._identitiesHash[id]) {
+          delete this._identitiesHash[id];
+          this._triggerAsync('identities:remove', { identities: [identity] });
+        }
+        break;
+      case 'serviceidentities':
+        if (this._serviceIdentitiesHash[id]) {
+          delete this._serviceIdentitiesHash[id];
+          this._triggerAsync('identities:remove', { identities: [identity] });
+        }
+        break;
     }
     return this;
+  }
+
+  /**
+   * Follow this user and get Full Identity, and websocket changes on Identity.
+   *
+   * @method followUser
+   * @param {string} userId
+   * @returns {layer.UserIdentity}
+   */
+  followUser(userId) {
+    let identity = this.getIdentity('layer:///identities/' + userId);
+    if (!identity) {
+      identity = new UserIdentity({
+        id: 'layer:///identities/' + userId,
+        clientId: this.appId,
+        userId,
+      });
+    }
+    identity.follow();
+    return identity;
+  }
+
+  /**
+   * Unfollow this user and get only Basic Identity, and no websocket changes on Identity.
+   *
+   * @method unfollowUser
+   * @param {string} userId
+   * @returns {layer.UserIdentity}
+   */
+  unfollowUser(userId) {
+    let identity = this.getIdentity('layer:///identities/' + userId);
+    if (!identity) {
+      identity = new UserIdentity({
+        id: 'layer:///identities/' + userId,
+        clientId: this.appId,
+        userId,
+      });
+    }
+    identity.unfollow();
+    return identity;
   }
 
   /**
@@ -740,79 +785,15 @@ class Client extends ClientAuth {
    */
   _resetSession() {
     this._cleanup();
-    this.users = [];
     this._conversationsHash = {};
     this._messagesHash = {};
     this._queriesHash = {};
+    this._identitiesHash = {};
+    this._serviceIdentitiesHash = {};
     return super._resetSession();
   }
 
-  /**
-   * Add a user to the users array.
-   *
-   * By doing this instead of just directly `this.client.users.push(user)`
-   * the user will get its conversations property setup correctly.
-   *
-   * @method addUser
-   * @param  {layer.User} user [description]
-   * @returns {layer.Client} this
-   */
-  addUser(user) {
-    this.users.push(user);
-    user.setClient(this);
-    this.trigger('users:change');
-    return this;
-  }
 
-  /**
-   * Searches `client.users` array for the specified id.
-   *
-   * Use of the `client.users` array is optional.
-   *
-   *      function getSenderDisplayName(message) {
-   *          var user = client.findUser(message.sender.userId);
-   *          return user ? user.displayName : 'Unknown User';
-   *      }
-   *
-   * @method findUser
-   * @param  {string} id
-   * @return {layer.User}
-   */
-  findUser(id) {
-    const l = this.users.length;
-    for (let i = 0; i < l; i++) {
-      const u = this.users[i];
-      if (u.id === id) return u;
-    }
-  }
-
-  /**
-   * __ Methods are automatically called by property setters.
-   *
-   * Insure that any attempt to set the `users` property sets it to an array.
-   *
-   * @method __adjustUsers
-   * @private
-   */
-  __adjustUsers(users) {
-    if (!users) return [];
-    if (!Array.isArray(users)) return [users];
-  }
-
-  /**
-   * __ Methods are automatically called by property setters.
-   *
-   * Insure that each user in the users array gets its client property setup.
-   *
-   * @method __adjustUsers
-   * @private
-   */
-  __updateUsers(users) {
-    users.forEach(u => {
-      if (u instanceof User) u.setClient(this);
-    });
-    this.trigger('users:change');
-  }
 
   /**
    * This method is recommended way to create a Conversation.
@@ -1222,19 +1203,6 @@ Client.prototype._scheduleCheckAndPurgeCacheItems = null;
  */
 Client.prototype._scheduleCheckAndPurgeCacheAt = 0;
 
-/**
- * Array of layer.User objects.
- *
- * Use of this property is optional; but by storing
- * an array of layer.User objects in this array, you can
- * then use the `client.findUser(userId)` method to lookup
- * users; and you can use the layer.User objects to find
- * suitable Conversations so you can associate a Direct
- * Message conversation with each user.
- *
- * @type {layer.User[]}
- */
-Client.prototype.users = null;
 
 Client.prototype.user = null;
 

@@ -209,6 +209,7 @@ class ClientAuthenticator extends Root {
    */
   connect(userId) {
     this.isConnected = false;
+    this.onlineManager.start();
     if (!this.isTrustedDevice || !userId || this._isPersistedSessionsDisabled() || this._hasUserIdChanged(userId)) {
       this._clearStoredData();
     }
@@ -251,6 +252,7 @@ class ClientAuthenticator extends Root {
       this._clearStoredData();
     }
 
+    this.onlineManager.start();
     this.userId = userId;
     this.isConnected = true;
     setTimeout(() => this._authComplete({ session_token: sessionToken }), 1);
@@ -489,7 +491,6 @@ class ClientAuthenticator extends Root {
     if (!this.isReady) {
       this.isReady = true;
       this.trigger('ready');
-      this.onlineManager.start();
     }
   }
 

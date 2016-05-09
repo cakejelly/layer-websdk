@@ -101,7 +101,20 @@ class MessagesQuery {
   }
 }
 
-class AnnouncementQuery extends MessagesQuery {
+/**
+ * Query builder class generating queries for a set of Announcements.
+ *
+ * To get started:
+ *
+ *      var qBuilder = QueryBuilder
+ *       .announcements()
+ *       .paginationWindow(100);
+ *      var query = client.createQuery(qBuilder);
+ *
+ * @class layer.QueryBuilder.AnnouncementsQuery
+ * @extends layer.QueryBuilder.MessagesQuery
+ */
+class AnnouncementsQuery extends MessagesQuery {
   constructor(options) {
     super(options);
     this._query.model = Query.Announcement;
@@ -115,8 +128,6 @@ class AnnouncementQuery extends MessagesQuery {
  * Query builder class generating queries for a set of Conversations.
  *
  * Used in Creating and Updating layer.Query instances.
- * Note that at this time, the only thing we can query for is
- * ALL Conversations; primary use for this is to page through the Conversations.
  *
  * To get started:
  *
@@ -206,6 +217,75 @@ class ConversationsQuery {
   }
 }
 
+
+/**
+ * Query builder class generating queries for a set of Identities followed by this user.
+ *
+ * Used in Creating and Updating layer.Query instances.
+ *
+ * To get started:
+ *
+ *      var qBuilder = QueryBuilder
+ *       .identities()
+ *       .paginationWindow(100);
+ *      var query = client.createQuery(qBuilder);
+ *
+ * @class layer.QueryBuilder.IdentitiesQuery
+ */
+class IdentitiesQuery {
+
+  /**
+   * Creates a new query builder for a set of conversations.
+   *
+   * Standard use is without any arguments.
+   *
+   * @method constructor
+   * @param  {Object} [query=null]
+   */
+  constructor(query) {
+    if (query) {
+      this._query = {
+        model: query.model,
+        returnType: query.returnType,
+        dataType: query.dataType,
+        paginationWindow: query.paginationWindow,
+      };
+    } else {
+      this._query = {
+        model: Query.Identity,
+        returnType: 'object',
+        dataType: 'object',
+        paginationWindow: Query.prototype.paginationWindow,
+      };
+    }
+  }
+
+  /**
+   * Sets the pagination window/number of messages to fetch from the local cache or server.
+   *
+   * Currently only positive integers are supported.
+   *
+   * @method paginationWindow
+   * @param  {number} win
+   * @return {layer.QueryBuilder} this
+   */
+  paginationWindow(win) {
+    this._query.paginationWindow = win;
+    return this;
+  }
+
+  /**
+   * Returns the built query object to send to the server.
+   *
+   * Called by layer.QueryBuilder. You should not need to call this.
+   *
+   * @method build
+   */
+  build() {
+    return this._query;
+  }
+}
+
 /**
  * Query builder class. Used with layer.Query to specify what local/remote
  * data changes to subscribe to.  For examples, see layer.QueryBuilder.MessagesQuery
@@ -234,8 +314,14 @@ const QueryBuilder = {
     return new MessagesQuery();
   },
 
+  /**
+   * Create a new layer.AnnouncementsQuery instance.
+   *
+   * @method announcements
+   * @returns {layer.QueryBuilder.AnnouncementsQuery}
+   */
   announcements() {
-    return new AnnouncementQuery();
+    return new AnnouncementsQuery();
   },
 
   /**
@@ -247,6 +333,16 @@ const QueryBuilder = {
    */
   conversations() {
     return new ConversationsQuery();
+  },
+
+  /**
+   * Create a new layer.IdentitiesQuery instance.
+   *
+   * @method identities
+   * @returns {layer.QueryBuilder.IdentitiesQuery}
+   */
+  identities() {
+    return new IdentitiesQuery();
   },
 
   /**
@@ -265,7 +361,7 @@ const QueryBuilder = {
       case Query.Message:
         return new MessagesQuery(obj);
       case Query.Announcement:
-        return new AnnouncementQuery(obj);
+        return new AnnouncementsQuery(obj);
       case Query.Conversation:
         return new ConversationsQuery(obj);
       default:
