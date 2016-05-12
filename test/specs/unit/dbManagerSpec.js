@@ -6,6 +6,8 @@ describe("The DbManager Class", function() {
     var client,
         conversation,
         message,
+        identity,
+        basicIdentity,
         dbManager;
 
     beforeEach(function(done) {
@@ -16,10 +18,33 @@ describe("The DbManager Class", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
+        client._clientAuthenticated();
         client._clientReady();
         client.syncManager.queue = [];
         conversation = client._createObject(responses.conversation1);
         message = conversation.lastMessage;
+        identity = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: client.userId,
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true
+        });
+        basicIdentity = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: client.userId,
+          id: "layer:///identities/" + client.userId,
+          isFullIdentity: false
+        });
+        client.user = identity;
         dbManager = client.dbManager;
         dbManager.deleteTables(function() {
           done();
@@ -75,6 +100,29 @@ describe("The DbManager Class", function() {
         spyOn(dbManager, "deleteObjects");
         client.trigger('messages:delete', { target: message });
         expect(dbManager.deleteObjects).toHaveBeenCalledWith('messages', [message]);
+      });
+
+      it("Should listen for identities:add events", function() {
+        spyOn(dbManager, "writeIdentities");
+        client.trigger('identities:add', { identities: [identity] });
+        expect(dbManager.writeIdentities).toHaveBeenCalledWith([identity], false);
+      });
+
+      it("Should listen for identities:change events", function() {
+        spyOn(dbManager, "writeIdentities");
+        client.trigger('identities:change', {
+          target: identity,
+          oldValue: 1,
+          newValue: 2,
+          property: 'displayName'
+        });
+        expect(dbManager.writeIdentities).toHaveBeenCalledWith([identity], true);
+      });
+
+      it("Should listen for identities:unfollow events", function() {
+        spyOn(dbManager, "deleteObjects");
+        client.trigger('identities:unfollow', { target: identity });
+        expect(dbManager.deleteObjects).toHaveBeenCalledWith('identities', [identity]);
       });
 
       it("Should listen for sync:add events", function() {
@@ -284,8 +332,10 @@ describe("The DbManager Class", function() {
           received_at: message.receivedAt.toISOString(),
           conversation: message.conversationId,
           sender: {
-            user_id: message.sender.user_id || '',
-            name: ''
+            user_id: message.sender.userId || '',
+            name: '',
+            display_name: message.sender.displayName,
+            avatar_url: message.sender.avatarUrl
           },
           sync_state: message.syncState,
           parts: [{
@@ -296,6 +346,8 @@ describe("The DbManager Class", function() {
             content: null
           }]
         }]);
+        expect(message.sender.displayName.length > 0).toBe(true);
+        expect(message.sender.avatarUrl.length > 0).toBe(true);
       });
 
       it("Should generate a proper Announcement object", function() {
@@ -311,7 +363,9 @@ describe("The DbManager Class", function() {
           conversation: 'announcement',
           sender: {
             user_id: '',
-            name: 'Hey ho'
+            name: 'Hey ho',
+            display_name: 'Hey ho',
+            avatar_url: ''
           },
           sync_state: message.syncState,
           parts: [{
@@ -369,6 +423,64 @@ describe("The DbManager Class", function() {
         spyOn(dbManager, "_getMessageData").and.returnValue([{id: 'fred'}]);
         dbManager.writeMessages([message], false);
         expect(dbManager._writeObjects).toHaveBeenCalledWith('messages', [{id: 'fred'}], jasmine.any(Boolean), undefined);
+      });
+    });
+
+
+    describe("The _getIdentityData() method", function() {
+      it("Should ignore anything that just came out of the database and clear _fromDB", function() {
+        identity._fromDB = true;
+        expect(dbManager._getIdentityData([identity])).toEqual([]);
+        expect(identity._fromDB).toBe(false);
+      });
+
+      it("Should ignore Basic Identities", function() {
+        expect(dbManager._getIdentityData([identity, basicIdentity])).toEqual(dbManager._getIdentityData([identity]));
+      });
+
+      it("Should ignore Loading Identities", function() {
+        identity.syncState = layer.Constants.SYNC_STATE.LOADING;
+        expect(dbManager._getIdentityData([identity, basicIdentity])).toEqual([]);
+      });
+
+
+      it("Should generate a proper Identity object", function() {
+        expect(dbManager._getIdentityData([identity])).toEqual([{
+          id: identity.id,
+          url: identity.url,
+          user_id: identity.userId,
+          first_name: identity.firstName,
+          last_name: identity.lastName,
+          display_name: identity.displayName,
+          avatar_url: identity.avatarUrl,
+          metadata: identity.metadata,
+          public_key: identity.publicKey,
+          phone_number: identity.phoneNumber,
+          sync_state: identity.syncState,
+        }]);
+      });
+    });
+
+    describe("The writeIdentities() method", function() {
+      it("Should forward isUpdate true to writeIdentities", function() {
+        spyOn(dbManager, "_writeObjects");
+        spyOn(dbManager, "_getIdentityData").and.returnValue([{id: 'fred'}]);
+        dbManager.writeIdentities([identity], false);
+        expect(dbManager._writeObjects).toHaveBeenCalledWith('identities', jasmine.any(Object), false, undefined);
+      });
+
+      it("Should forward isUpdate true to writeIdentities", function() {
+        spyOn(dbManager, "_writeObjects");
+        spyOn(dbManager, "_getIdentityData").and.returnValue([{id: 'fred'}]);
+        dbManager.writeIdentities([message], true);
+        expect(dbManager._writeObjects).toHaveBeenCalledWith('identities', jasmine.any(Object), true, undefined);
+      });
+
+      it("Should feed data from _getIdentityData to _writeObjects", function() {
+        spyOn(dbManager, "_writeObjects");
+        spyOn(dbManager, "_getIdentityData").and.returnValue([{id: 'fred'}]);
+        dbManager.writeIdentities([message], false);
+        expect(dbManager._writeObjects).toHaveBeenCalledWith('identities', [{id: 'fred'}], jasmine.any(Boolean), undefined);
       });
     });
 
@@ -719,7 +831,7 @@ describe("The DbManager Class", function() {
         expect(dbManager._createMessage).toHaveBeenCalledWith(dbManager._getMessageData([m2])[0]);
       });
 
-      it("Only returns new messages", function() {
+      it("Returns new and existing messages", function() {
         var m1 = conversation.createMessage("m1");
         var m2 = conversation.createMessage("m2");
         client._messagesHash = {}
@@ -730,7 +842,52 @@ describe("The DbManager Class", function() {
         dbManager._loadMessagesResult(dbManager._getMessageData([m1, m2]), spy);
 
         // Posttest
-        expect(spy).toHaveBeenCalledWith([jasmine.objectContaining({id: m1.id}), jasmine.objectContaining({id: m2.id})]);
+        expect(spy).toHaveBeenCalledWith([jasmine.objectContaining({id: m1.id}), m2]);
+      });
+    });
+
+    describe("The loadIdentities() method", function() {
+      it("Should call _loadAll", function() {
+        spyOn(dbManager, "_loadAll");
+        dbManager.loadIdentities(function() {});
+        expect(dbManager._loadAll).toHaveBeenCalledWith('identities', jasmine.any(Function));
+      });
+
+      it("Should call _loadIdentitiesResult", function() {
+        spyOn(dbManager, "_loadIdentitiesResult");
+        spyOn(dbManager, "_loadAll").and.callFake(function(table, callback) {
+          callback([identity]);
+        });
+        var spy = jasmine.createSpy('spy');
+        dbManager.loadIdentities(spy);
+        expect(dbManager._loadIdentitiesResult).toHaveBeenCalledWith([identity], spy);
+      });
+    });
+
+    describe("The _loadIdentitiesResult() method", function() {
+      it("Calls _createIdentity on each identity", function() {
+        spyOn(dbManager, "_createIdentity");
+        basicIdentity.isFullIdentity = true;
+
+        // Run
+        dbManager._loadIdentitiesResult(dbManager._getIdentityData([identity, basicIdentity]));
+
+        // Posttest
+        expect(dbManager._createIdentity).toHaveBeenCalledWith(dbManager._getIdentityData([identity])[0]);
+        expect(dbManager._createIdentity).toHaveBeenCalledWith(dbManager._getIdentityData([basicIdentity])[0]);
+      });
+
+      it("Only returns new identities", function() {
+        client._identitiesHash = {}
+        client._identitiesHash[identity.id] = identity;
+        basicIdentity.isFullIdentity = true;
+        var spy = jasmine.createSpy('spy');
+
+        // Run
+        dbManager._loadIdentitiesResult(dbManager._getIdentityData([identity, basicIdentity]), spy);
+
+        // Posttest
+        expect(spy).toHaveBeenCalledWith([identity, jasmine.objectContaining({id: basicIdentity.id})]);
       });
     });
 
@@ -777,6 +934,23 @@ describe("The DbManager Class", function() {
       it("Should do nothing if the Message already is instantiated", function() {
         client._messagesHash[message.id] = message;
         expect(dbManager._createMessage(dbManager._getMessageData([message])[0])).toBe(undefined);
+      });
+    });
+
+    describe("The _createIdentity() method", function() {
+      it("Should return an Identity", function() {
+        delete client._identitiesHash[identity.id];
+        expect(dbManager._createIdentity(dbManager._getIdentityData([identity])[0])).toEqual(jasmine.any(layer.Identity));
+      });
+
+      it("Should flag Identity with _fromDB property", function() {
+        delete client._identitiesHash[identity.id];
+        expect(dbManager._createIdentity(dbManager._getIdentityData([identity])[0])._fromDB).toBe(true);
+      });
+
+      it("Should do nothing if the Identity already is instantiated", function() {
+        client._identitiesHash[identity.id] = identity;
+        expect(dbManager._createIdentity(dbManager._getIdentityData([identity])[0])).toBe(undefined);
       });
     });
 

@@ -13,6 +13,34 @@ describe("The OnlineStateManager Class", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+            clientId: client.appId,
+            userId: client.userId,
+            id: "layer:///identities/" + client.userId,
+            firstName: "first",
+            lastName: "last",
+            phoneNumber: "phone",
+            emailAddress: "email",
+            metadata: {},
+            publicKey: "public",
+            avatarUrl: "avatar",
+            displayName: "display",
+            syncState: layer.Constants.SYNC_STATE.SYNCED,
+            isFullIdentity: true,
+            sessionOwner: true
+        });
+
+
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
+        client.onlineManager.isOnline = true;
+
 
         conversation = client._createObject(responses.conversation1).conversation;
         requests.reset();
@@ -116,10 +144,10 @@ describe("The OnlineStateManager Class", function() {
             manager.destroy();
         });
 
-        it("Should call _scheduleNextOnlineCheck", function() {
-          spyOn(manager, "_scheduleNextOnlineCheck");
+        it("Should call checkOnlineStatus", function() {
+          spyOn(manager, "checkOnlineStatus");
           manager.start();
-          expect(manager._scheduleNextOnlineCheck).toHaveBeenCalledWith();
+          expect(manager.checkOnlineStatus).toHaveBeenCalledWith();
         });
 
         it("Should set isOnline to true", function() {
@@ -128,27 +156,12 @@ describe("The OnlineStateManager Class", function() {
           expect(manager.isOnline).toBe(true);
         });
 
-        it("Should not trigger connected for the first call to start", function() {
-          spyOn(manager, "trigger");
-          manager.start();
-          expect(manager.trigger).not.toHaveBeenCalled();
-        });
-
-
-        it("Should trigger connected on all subsequent calls to start", function() {
-          spyOn(manager, "trigger");
-          manager.start();
-          manager.start();
-          manager.start();
-          expect(manager.trigger).toHaveBeenCalledWith("connected", { offlineDuration: 0 });
-          expect(manager.trigger.calls.count()).toEqual(2);
-        });
 
         it("Should set isClientReady to true", function() {
-        manager.isClientReady = false;
-        manager.start();
-        expect(manager.isClientReady).toBe(true);
-      });
+            manager.isClientReady = false;
+            manager.start();
+            expect(manager.isClientReady).toBe(true);
+        });
     });
 
     describe("The stop() method", function() {

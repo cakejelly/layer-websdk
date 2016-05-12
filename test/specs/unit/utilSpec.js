@@ -245,6 +245,34 @@ describe("The Util Library", function() {
         beforeEach(function() {
             client = new layer.Client({appId: "fred"});
             client.userId = "c";
+            client.user = new layer.UserIdentity({
+                clientId: client.appId,
+                userId: client.userId,
+                id: "layer:///identities/" + client.userId,
+                firstName: "first",
+                lastName: "last",
+                phoneNumber: "phone",
+                emailAddress: "email",
+                metadata: {},
+                publicKey: "public",
+                avatarUrl: "avatar",
+                displayName: "display",
+                syncState: layer.Constants.SYNC_STATE.SYNCED,
+                isFullIdentity: true,
+                sessionOwner: true
+            });
+
+
+            client._clientAuthenticated();
+            getObjectsResult = [];
+            spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+                setTimeout(function() {
+                    callback(getObjectsResult);
+                }, 10);
+            });
+            client._clientReady();
+            client.onlineManager.isOnline = true;
+
             conversation = client.createConversation({
                 participants: ["a", "b"],
                 metadata: {

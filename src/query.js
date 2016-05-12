@@ -361,7 +361,9 @@ class Query extends Root {
   _runConversation(pageSize) {
     // If no data, retrieve data from db cache in parallel with loading data from server
     if (this.isReset) {
-      this.client.dbManager.loadConversations(conversations => this._appendResults({ data: conversations }));
+      this.client.dbManager.loadConversations((conversations) => {
+        if (conversations.length) this._appendResults({ data: conversations });
+      });
     }
     this.isReset = false;
 
@@ -446,7 +448,9 @@ class Query extends Root {
 
       // If no data, retrieve data from db cache in parallel with loading data from server
       if (this.isReset) {
-        this.client.dbManager.loadMessages(conversationId, messages => this._appendResults({ data: messages }));
+        this.client.dbManager.loadMessages(conversationId, (messages) => {
+          if (messages.length) this._appendResults({ data: messages });
+        });
       }
       this.isReset = false;
 
@@ -504,7 +508,9 @@ class Query extends Root {
   _runAnnouncement(pageSize) {
     // If no data, retrieve data from db cache in parallel with loading data from server
     if (this.isReset) {
-      this.client.dbManager.loadAnnouncements(messages => this._appendResults({ data: messages }));
+      this.client.dbManager.loadAnnouncements((messages) => {
+        if (messages.length) this._appendResults({ data: messages });
+      });
     }
     this.isReset = false;
 
@@ -541,7 +547,9 @@ class Query extends Root {
   _runIdentity(pageSize) {
     // If no data, retrieve data from db cache in parallel with loading data from server
     if (this.isReset) {
-      this.client.dbManager.loadIdentities(identities => this._appendResults({ data: identities }));
+      this.client.dbManager.loadIdentities((identities) => {
+        if (identities.length) this._appendResults({ data: identities });
+      });
     }
     this.isReset = false;
 
@@ -1173,7 +1181,7 @@ class Query extends Root {
     // Add them to our result set and trigger an event for each one
     if (list.length) {
       const data = this.data = this.dataType === Query.ObjectDataType ? [].concat(this.data) : this.data;
-      list.forEach(item => data.splice(0, 0, item));
+      list.forEach(item => data.push(item));
 
       this.totalSize += list.length;
 

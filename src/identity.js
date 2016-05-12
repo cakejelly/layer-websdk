@@ -29,6 +29,7 @@
 const Syncable = require('./syncable');
 const Root = require('./root');
 const Constants = require('./const');
+const LayerError = require('./layer-error');
 
 class Identity extends Syncable {
   constructor(options = {}) {
@@ -37,6 +38,7 @@ class Identity extends Syncable {
 
     // Make sure we have an clientId property
     if (options.client) options.clientId = options.client.appId;
+    if (!options.clientId) throw new Error(LayerError.dictionary.clientMissing);
 
     super(options);
 
@@ -106,7 +108,7 @@ Root.initClass.apply(Identity, [Identity, 'Identity']);
 class UserIdentity extends Identity {
   constructor(options) {
     super(options);
-    if (!options.fromServer && !options.url) this.url = `${this.getClient().url}/identities/${this.userId}`;
+    if (!this.url) this.url = `${this.getClient().url}/identities/${this.userId}`;
   }
 
   /**
@@ -173,7 +175,7 @@ class UserIdentity extends Identity {
   _updateValue(key, value) {
     if (this[key] !== value) {
       if (!this.isInitializing) {
-        this.trigger('identities:change', {
+        this._triggerAsync('identities:change', {
           property: key,
           oldValue: this[key],
           newValue: value,
@@ -242,7 +244,8 @@ class UserIdentity extends Identity {
   // Turn a Full Identity into a Basic Identity and delete the Full Identity from the database
   _handleWebsocketDelete(data) {
     this.getClient().dbManager.deleteObjects('identities', [this]);
-    ['emailAddress', 'phoneNumber', 'metadata', 'publicKey', 'isFullIdentity'].forEach(key => delete this[key]);
+    ['firstName', 'lastName', 'emailAddress', 'phoneNumber', 'metadata', 'publicKey', 'isFullIdentity'].forEach(key => delete this[key]);
+    this._triggerAsync('identities:unfollow');
   }
 
   /**
@@ -336,6 +339,7 @@ UserIdentity.bubbleEventParent = 'getClient';
 UserIdentity._supportedEvents = [
   'identities:loaded',
   'identities:loaded-error',
+  'identities:unfollow',
 ];
 
 UserIdentity.eventPrefix = 'identities';

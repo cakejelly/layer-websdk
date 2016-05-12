@@ -65,6 +65,8 @@ class Syncable extends Root {
     } else {
       syncItem._load();
     }
+
+    syncItem.syncState = SYNC_STATE.LOADING;
     return syncItem;
   }
 
@@ -80,12 +82,15 @@ class Syncable extends Root {
   _xhr(options, callback) {
     // initialize
     if (!options.url) options.url = '';
+    if (!options.method) options.method = 'GET';
     const client = this.getClient();
 
     // Validatation
     if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
     if (!client) throw new Error(LayerError.dictionary.clientMissing);
-    if (!this.constructor.enableOpsIfNew && options.method !== 'POST' && this.syncState === Constants.SYNC_STATE.NEW) return this;
+    if (!this.constructor.enableOpsIfNew &&
+      options.method !== 'POST' && options.method !== 'GET' &&
+      this.syncState === Constants.SYNC_STATE.NEW) return this;
 
     if (!options.url.match(/^http(s):\/\//)) {
       if (options.url && !options.url.match(/^(\/|\?)/)) options.url = '/' + options.url;
@@ -95,13 +100,12 @@ class Syncable extends Root {
     // Setup sync structure
     options.sync = this._setupSyncObject(options.sync);
 
-    const isGET = !options.method || options.method === 'GET';
-    if (!isGET) {
+    if (options.method !== 'GET') {
       this._setSyncing();
     }
 
     client.xhr(options, (result) => {
-      if (result.success && !isGET && !this.isDestroyed) {
+      if (result.success && options.method !== 'GET' && !this.isDestroyed) {
         this._setSynced();
       }
       if (callback) callback(result);
@@ -305,6 +309,13 @@ Syncable.prototype.localCreatedAt = null;
  * @type {string}
  */
 Syncable.prototype.clientId = '';
+
+/**
+ * Temporary property indicating that the instance was loaded from local database rather than server.
+ *
+ * @type {boolean}
+ */
+Syncable.prototype._fromDB = false;
 
 /**
  * The current sync state of this object.

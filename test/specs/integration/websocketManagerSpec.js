@@ -85,6 +85,34 @@ describe("Websocket tests", function() {
             appId: "Client1"
         });
         client.userId = "c";
+        client.user = new layer.UserIdentity({
+            clientId: client.appId,
+            userId: client.userId,
+            id: "layer:///identities/" + client.userId,
+            firstName: "first",
+            lastName: "last",
+            phoneNumber: "phone",
+            emailAddress: "email",
+            metadata: {},
+            publicKey: "public",
+            avatarUrl: "avatar",
+            displayName: "display",
+            syncState: layer.Constants.SYNC_STATE.SYNCED,
+            isFullIdentity: true,
+            sessionOwner: true
+        });
+
+
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
+        client.onlineManager.isOnline = true;
+
         socket = client.socketManager;
         socket._socket = {
             close: function() {},
@@ -832,7 +860,8 @@ describe("Websocket tests", function() {
                     },
                     sender: {user_id: "a"},
                     parts: [{body: "hello", mime_type: "text/plain"}],
-                    id: m1.id
+                    id: m1.id,
+                    sent_at: '2010-10-10'
                 },
                 client: client
             });

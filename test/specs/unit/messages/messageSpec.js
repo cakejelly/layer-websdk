@@ -16,11 +16,37 @@ describe("The Message class", function() {
             url: "https://doh.com"
         });
         client.userId = "999";
+        client.user = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: client.userId,
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true,
+          sessionOwner: true
+        });
+
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
+        client.onlineManager.isOnline = true;
+
         conversation = layer.Conversation._createFromServer(responses.conversation2, client);
 
         requests.reset();
         jasmine.clock().tick(1);
-        client._clientReady();
     });
     afterEach(function() {
         if (client) client.destroy();
@@ -53,10 +79,7 @@ describe("The Message class", function() {
         });
 
         it("Should create a default sender value", function() {
-            expect(message.sender).toEqual({
-                userId: "",
-                name: ""
-            });
+            expect(message.sender).toBe(client.user);
         });
 
 
@@ -354,7 +377,7 @@ describe("The Message class", function() {
                 client: client
             });
             var c = m.getConversation(false);
-            expect(c).toEqual(undefined);
+            expect(c).toEqual(null);
         });
     });
 
@@ -616,7 +639,7 @@ describe("The Message class", function() {
         it("Should trigger change events if this user was sender and another users status changes", function() {
             // Setup
             spyOn(m, "_triggerAsync");
-            m.sender.userId = client.userId;
+            m.sender = client.user;
             m.__recipientStatus = {999: "read", a: "sent", b: "delivered", c: "delivered"};
             m.__recipientStatus[client.userId] = "read";
             var oldValue = m.__recipientStatus;
@@ -1022,7 +1045,7 @@ describe("The Message class", function() {
 
         it("Should load Conversation if missing", function() {
             client._removeConversation(client.getConversation(m.conversationId));
-            expect(client.getConversation(m.conversationId)).toBe(undefined);
+            expect(client.getConversation(m.conversationId)).toBe(null);
 
             // Run
              m.send();
@@ -1739,16 +1762,31 @@ describe("The Message class", function() {
             expect(m.recipientStatus).toEqual(data.recipient_status);
         });
 
-        it("Should set sender.name", function() {
+        it("Should set sender to existing UserIdentity", function() {
             m = new layer.Message({
                 client: client
             });
             var data = JSON.parse(JSON.stringify(responses.message1));
+            expect(client.getIdentity(data.sender.user_id)).toEqual(jasmine.any(layer.UserIdentity));
+
             m._populateFromServer(data);
 
-            expect(m.sender.userId).toEqual(responses.message1.sender.user_id);
-            expect(m.sender.userId.length > 0).toBe(true);
-            expect(m.sender.name).toEqual("");
+            expect(m.sender).toBe(client.getIdentity(data.sender.user_id));
+        });
+
+        it("Should set sender to a new UserIdentity", function() {
+            m = new layer.Message({
+                client: client
+            });
+            var data = JSON.parse(JSON.stringify(responses.message1));
+            data.sender.user_id += "1";
+            expect(client.getIdentity(data.sender.user_id)).toEqual(null);
+
+            m._populateFromServer(data);
+
+            // Posttest
+            expect(m.sender).toEqual(jasmine.any(layer.UserIdentity));
+            expect(m.sender.userId).toEqual(data.sender.user_id);
         });
 
         it("Should set sender.name", function() {
@@ -1761,7 +1799,7 @@ describe("The Message class", function() {
             m._populateFromServer(data);
 
             expect(m.sender.name).toEqual("Fred");
-            expect(m.sender.userId).toEqual("");
+            expect(m.sender).toEqual(jasmine.any(layer.ServiceIdentity));
         });
 
         it("Should call _setSynced", function() {
@@ -1849,11 +1887,12 @@ describe("The Message class", function() {
             }).toThrowError(layer.LayerError.dictionary.isDestroyed);
         });
 
-        it("Should throw an error if the request fails to specify a url", function() {
+        it("Should use resource url", function() {
             // Run
-            expect(function() {
-                m._xhr({method: "GET"});
-            }).toThrowError(layer.LayerError.dictionary.urlRequired);
+            m._xhr({method: "GET"});
+
+            // Posttest
+            expect(requests.mostRecent().url).toEqual(m.url);
         });
 
 
@@ -1901,7 +1940,7 @@ describe("The Message class", function() {
             expect(client.xhr).toHaveBeenCalledWith(jasmine.objectContaining({
                 url: '/hey',
                 sync: jasmine.any(Object)
-            }), undefined);
+            }), jasmine.any(Function));
         });
 
     });

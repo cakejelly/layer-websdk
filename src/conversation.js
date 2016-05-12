@@ -607,9 +607,9 @@ class Conversation extends Syncable {
 
   _handleWebsocketDelete(data) {
     if (data.mode === 'my_devices' && data.from_position) {
-      this.client._purgeMessagesByPosition(this.id, data.from_position);
+      this.getClient()._purgeMessagesByPosition(this.id, data.from_position);
     } else {
-      this.super();
+      super._handleWebsocketDelete();
     }
   }
 
@@ -1252,9 +1252,6 @@ Conversation.eventPrefix = 'conversations';
  * @private
  */
 Conversation.prototype._sendDistinctEvent = null;
-
-
-Conversation.prototype._fromDB = false;
 
 /**
  * Prefix to use when generating an ID for instances of this class

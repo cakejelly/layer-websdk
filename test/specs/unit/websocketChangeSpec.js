@@ -13,6 +13,34 @@ describe("The Websocket Change Manager Class", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+            clientId: client.appId,
+            userId: client.userId,
+            id: "layer:///identities/" + client.userId,
+            firstName: "first",
+            lastName: "last",
+            phoneNumber: "phone",
+            emailAddress: "email",
+            metadata: {},
+            publicKey: "public",
+            avatarUrl: "avatar",
+            displayName: "display",
+            syncState: layer.Constants.SYNC_STATE.SYNCED,
+            isFullIdentity: true,
+            sessionOwner: true
+        });
+
+
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
+        client.onlineManager.isOnline = true;
+
         changeManager = client.socketChangeManager;
         conversation = client._createObject(responses.conversation1);
         requests.reset();
@@ -177,11 +205,10 @@ describe("The Websocket Change Manager Class", function() {
     });
 
     describe("The _handleDelete() method", function() {
-        it("Should call object._deleted and object.destroy if found", function() {
+        it("Should call object._handleWebsocketDelete if found", function() {
             var m = conversation.createMessage("hey").send();
             spyOn(changeManager, "_getObject").and.returnValue(m);
-            spyOn(m, "_deleted");
-            spyOn(m, "destroy");
+            spyOn(m, "_handleWebsocketDelete");
 
             // Run
             changeManager._handleDelete({
@@ -194,15 +221,15 @@ describe("The Websocket Change Manager Class", function() {
             });
 
             // Posttest
-            expect(m._deleted).toHaveBeenCalledWith();
-            expect(m.destroy).toHaveBeenCalledWith();
+            expect(m._handleWebsocketDelete).toHaveBeenCalledWith({
+                mode: "all_participants"
+            });
         });
 
         it("Should do nothing if the object is not found", function() {
             var m = conversation.createMessage("hey").send();
             spyOn(changeManager, "_getObject").and.returnValue(null);
-            spyOn(m, "_deleted");
-            spyOn(m, "destroy");
+            spyOn(m, "_handleWebsocketDelete");
 
             // Run
             changeManager._handleDelete({
@@ -215,64 +242,7 @@ describe("The Websocket Change Manager Class", function() {
             });
 
             // Posttest
-            expect(m._deleted).not.toHaveBeenCalled();
-            expect(m.destroy).not.toHaveBeenCalled();
-        });
-
-        it("Should not destroy the object if from_position has a value", function() {
-          var m = conversation.createMessage("hey").send();
-          m.position = 6;
-
-          // Run
-          changeManager._handleDelete({
-              object: {
-                  id: conversation.id
-              },
-              data: {
-                mode: 'my_devices',
-                from_position: 5
-              }
-          });
-
-          // Posttest
-          expect(m.isDestroyed).toBe(false);
-        });
-
-        it("Should destroy the object if from_position has a value", function() {
-          var m = conversation.createMessage("hey").send();
-          m.position = 4;
-
-          // Run
-          changeManager._handleDelete({
-              object: {
-                  id: conversation.id
-              },
-              data: {
-                mode: 'my_devices',
-                from_position: 5
-              }
-          });
-
-          // Posttest
-          expect(m.isDestroyed).toBe(true);
-        });
-
-        it("Should call client._purgeMessagesByPosition if from_position has a value", function() {
-          spyOn(client, "_purgeMessagesByPosition");
-
-          // Run
-          changeManager._handleDelete({
-              object: {
-                  id: conversation.id
-              },
-              data: {
-                mode: 'my_devices',
-                from_position: 5
-              }
-          });
-
-          // Posttest
-          expect(client._purgeMessagesByPosition).toHaveBeenCalledWith(conversation.id, 5);
+            expect(m._handleWebsocketDelete).not.toHaveBeenCalled();
         });
     });
 
@@ -323,6 +293,7 @@ describe("The Websocket Change Manager Class", function() {
                 },
                 data: [{operation: "set", property: "joe", value: "jane"}]
             });
+            jasmine.clock().tick(100);
 
             // Posttest
             expect(layer.Util.layerParse).not.toHaveBeenCalled();
@@ -379,6 +350,7 @@ describe("The Websocket Change Manager Class", function() {
                 },
                 data: [{operation: "set", property: "joe", value: "jane"}]
             });
+            jasmine.clock().tick(100);
 
             // Posttest
             expect(layer.Util.layerParse).not.toHaveBeenCalled();
