@@ -6,7 +6,8 @@ describe("The Syncable Class", function() {
         message,
         announcement,
         client,
-        requests;
+        requests,
+        getObjectsResult;
 
     beforeEach(function() {
         jasmine.clock().install();
@@ -18,6 +19,15 @@ describe("The Syncable Class", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
+        client.isTrustedDevice = true;
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
 
         conversation = client._createObject(responses.conversation1);
         message = client._createObject(responses.message1);
@@ -53,18 +63,40 @@ describe("The Syncable Class", function() {
           expect(layer.LayerError.dictionary.clientMissing).toEqual(jasmine.any(String));
         });
 
-        it("Should call _load", function() {
-          var tmp = layer.Message.prototype._load;
-          spyOn(layer.Message.prototype, "_load");
+        it("Should call dbManager.getObjects", function() {
+          client.dbManager.getObjects.calls.reset();
 
           // Run
-          layer.Message.load(responses.message1.id, client)
+          layer.Message.load(responses.message1.id, client);
 
           // Posttest
-          expect(layer.Message.prototype._load).toHaveBeenCalledWith();
+          expect(client.dbManager.getObjects).toHaveBeenCalledWith('messages', [responses.message1.id], jasmine.any(Function));
+        });
 
-          // Restore
-          layer.Message.prototype._load = tmp;
+        it("Should populateFromServer and trigger loaded if db has data", function() {
+            getObjectsResult = [{parts: []}];
+
+            // Run
+            var ident = layer.Message.load(responses.message1.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "trigger");
+            jasmine.clock().tick(11);
+
+            // Posttest
+            expect(ident._populateFromServer).toHaveBeenCalledWith({parts: []});
+            expect(ident.trigger).toHaveBeenCalledWith('messages:loaded');
+        });
+
+        it("Should call _load", function() {
+            // Run
+            var ident = layer.Message.load(responses.message1.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "_load");
+            jasmine.clock().tick(11);
+
+            // Posttest
+            expect(ident._populateFromServer).not.toHaveBeenCalled();
+            expect(ident._load).toHaveBeenCalledWith();
         });
       });
 
@@ -81,18 +113,31 @@ describe("The Syncable Class", function() {
           expect(layer.LayerError.dictionary.clientMissing).toEqual(jasmine.any(String));
         });
 
+        it("Should populateFromServer and trigger loaded if db has data", function() {
+            getObjectsResult = [{parts: []}];
+
+            // Run
+            var ident = layer.Announcement.load(responses.announcement.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "trigger");
+            jasmine.clock().tick(11);
+
+            // Posttest
+            expect(ident._populateFromServer).toHaveBeenCalledWith({parts: []});
+            expect(ident.trigger).toHaveBeenCalledWith('messages:loaded');
+        });
+
         it("Should call _load", function() {
-          var tmp = layer.Announcement.prototype._load;
-          spyOn(layer.Announcement.prototype, "_load");
 
-          // Run
-          layer.Announcement.load(responses.announcement.id, client)
+            // Run
+            var ident = layer.Announcement.load(responses.announcement.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "_load");
+            jasmine.clock().tick(11);
 
-          // Posttest
-          expect(layer.Announcement.prototype._load).toHaveBeenCalledWith();
-
-          // Restore
-          layer.Announcement.prototype._load = tmp;
+            // Posttest
+            expect(ident._populateFromServer).not.toHaveBeenCalled();
+            expect(ident._load).toHaveBeenCalledWith();
         });
       });
 
@@ -109,18 +154,71 @@ describe("The Syncable Class", function() {
           expect(layer.LayerError.dictionary.clientMissing).toEqual(jasmine.any(String));
         });
 
+        it("Should populateFromServer and trigger loaded if db has data", function() {
+            getObjectsResult = [{participants: []}];
+
+            // Run
+            var ident = layer.Conversation.load(responses.conversation1.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "trigger");
+            jasmine.clock().tick(11);
+
+            // Posttest
+            expect(ident._populateFromServer).toHaveBeenCalledWith({participants: []});
+            expect(ident.trigger).toHaveBeenCalledWith('conversations:loaded');
+        });
+
         it("Should call _load", function() {
-          var tmp = layer.Conversation.prototype._load;
-          spyOn(layer.Conversation.prototype, "_load");
 
-          // Run
-          layer.Conversation.load(responses.conversation1.id, client)
+            // Run
+            var ident = layer.Conversation.load(responses.conversation1.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "_load");
+            jasmine.clock().tick(11);
 
-          // Posttest
-          expect(layer.Conversation.prototype._load).toHaveBeenCalledWith();
+            // Posttest
+            expect(ident._populateFromServer).not.toHaveBeenCalled();
+            expect(ident._load).toHaveBeenCalledWith();
+        });
+      });
 
-          // Restore
-          layer.Conversation.prototype._load = tmp;
+      describe("Identity subclass", function() {
+        it("Should return an Identity", function() {
+          expect(layer.Identity.load(responses.useridentity.id, client) instanceof layer.Identity).toEqual(true);
+          expect(layer.Syncable.load(responses.useridentity.id, client) instanceof layer.Identity).toEqual(true);
+        });
+
+        it("Should throw error if no client", function() {
+          expect(function() {
+            layer.Identity.load(responses.useridentity.id);
+          }).toThrowError(layer.LayerError.dictionary.clientMissing);
+          expect(layer.LayerError.dictionary.clientMissing).toEqual(jasmine.any(String));
+        });
+
+        it("Should populateFromServer and trigger loaded if db has data", function() {
+            getObjectsResult = [{display_name: "hey ho"}];
+
+            // Run
+            var ident = layer.Identity.load(responses.useridentity.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "trigger");
+            jasmine.clock().tick(11);
+
+            // Posttest
+            expect(ident._populateFromServer).toHaveBeenCalledWith({display_name: "hey ho"});
+            expect(ident.trigger).toHaveBeenCalledWith('identities:loaded');
+        });
+
+        it("Should call _load", function() {
+            // Run
+            var ident = layer.Identity.load(responses.useridentity.id, client);
+            spyOn(ident, "_populateFromServer");
+            spyOn(ident, "_load");
+            jasmine.clock().tick(11);
+
+            // Posttest
+            expect(ident._populateFromServer).not.toHaveBeenCalled();
+            expect(ident._load).toHaveBeenCalledWith();
         });
       });
     });
@@ -143,7 +241,6 @@ describe("The Syncable Class", function() {
 
             // Posttest
             expect(conversation._xhr).toHaveBeenCalledWith({
-                url: "",
                 method: "GET",
                 sync: false
             }, jasmine.any(Function));
@@ -335,6 +432,19 @@ describe("The Syncable Class", function() {
             });
             expect(conversation.isLoading).toBe(false);
         });
+    });
+
+    describe("_handleWebsocketDelete", function() {
+      it("Should call _deleted", function() {
+         spyOn(message, "_deleted");
+         message._handleWebsocketDelete();
+         expect(message._deleted).toHaveBeenCalledWith();
+      });
+
+      it("Should call destroy", function() {
+         message._handleWebsocketDelete();
+         expect(message.isDestroyed).toBe(true);
+      });
     });
 
     describe("The _setSyncing() method", function() {

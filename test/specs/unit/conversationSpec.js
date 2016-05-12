@@ -16,6 +16,33 @@ describe("The Conversation Class", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: client.userId,
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true,
+          sessionOwner: true
+        });
+
+
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
+        client.onlineManager.isOnline = true;
 
         conversation = client._createObject(responses.conversation1);
         requests.reset();
@@ -1081,6 +1108,96 @@ describe("The Conversation Class", function() {
         });
     });
 
+    describe("The _handleWebsocketDelete() method", function() {
+
+        it("Should destroy the conversation if from_position has no value", function() {
+          // Run
+          var m = conversation.createMessage("hey").send();
+          m.position = 6;
+          spyOn(conversation, "trigger");
+          conversation._handleWebsocketDelete({
+            mode: 'my_devices',
+            from_position: null
+          });
+
+          // Posttest
+          expect(conversation.isDestroyed).toBe(true);
+          expect(m.isDestroyed).toBe(true);
+          expect(conversation.trigger).toHaveBeenCalledWith("conversations:delete");
+        });
+
+        it("Should destroy the conversation if mode is all_participants", function() {
+          // Run
+          var m = conversation.createMessage("hey").send();
+          m.position = 6;
+          spyOn(conversation, "trigger");
+          conversation._handleWebsocketDelete({
+            mode: 'all_participants'
+          });
+
+          // Posttest
+          expect(conversation.isDestroyed).toBe(true);
+          expect(m.isDestroyed).toBe(true);
+          expect(conversation.trigger).toHaveBeenCalledWith("conversations:delete");
+        });
+
+        it("Should not destroy the object if from_position has a lesser value", function() {
+          var m = conversation.createMessage("hey").send();
+          m.position = 6;
+
+          // Run
+          conversation._handleWebsocketDelete({
+            mode: 'my_devices',
+            from_position: 5
+          });
+
+          // Posttest
+          expect(m.isDestroyed).toBe(false);
+          expect(conversation.isDestroyed).toBe(false);
+        });
+
+        it("Should destroy the object if from_position has a greater value", function() {
+          var m = conversation.createMessage("hey").send();
+          m.position = 4;
+
+          // Run
+          conversation._handleWebsocketDelete({
+            mode: 'my_devices',
+            from_position: 5
+          });
+
+          // Posttest
+          expect(m.isDestroyed).toBe(true);
+          expect(conversation.isDestroyed).toBe(false);
+        });
+
+        it("Should call client._purgeMessagesByPosition if from_position has a value", function() {
+          spyOn(client, "_purgeMessagesByPosition");
+
+          // Run
+          conversation._handleWebsocketDelete({
+            mode: 'my_devices',
+            from_position: 5
+          });
+
+          // Posttest
+          expect(client._purgeMessagesByPosition).toHaveBeenCalledWith(conversation.id, 5);
+        });
+
+        it("Should not call client._purgeMessagesByPosition if from_position lacks a value", function() {
+          spyOn(client, "_purgeMessagesByPosition");
+
+          // Run
+          conversation._handleWebsocketDelete({
+            mode: 'my_devices',
+            from_position: null
+          });
+
+          // Posttest
+          expect(client._purgeMessagesByPosition).not.toHaveBeenCalled();
+        });
+    });
+
     describe("The createMessage() method", function() {
         it("Should return a new message with the provided parameters", function() {
 
@@ -1447,11 +1564,10 @@ describe("The Conversation Class", function() {
             conversation.clientId = client.appId;
         });
 
-        it("Should throw an error if no url specified", function() {
-            expect(function() {
-                conversation._xhr({});
-            }).toThrowError(layer.LayerError.dictionary.urlRequired);
-            expect(layer.LayerError.dictionary.urlRequired).toEqual(jasmine.any(String));
+        it("Should load the resource if no url or method", function() {
+            conversation._xhr({});
+            expect(requests.mostRecent().url).toEqual(conversation.url);
+            expect(requests.mostRecent().method).toEqual('GET');
         });
 
         it("Should do nothing if its NEW and not a POST request on a NEW Conversation", function() {
@@ -1462,7 +1578,7 @@ describe("The Conversation Class", function() {
             // Run
             conversation._xhr({
                 url: "",
-                method: "GET"
+                method: "PATCH"
             });
 
             // Posttest
@@ -1496,7 +1612,7 @@ describe("The Conversation Class", function() {
 
             // Posttest
             expect(client.xhr).toHaveBeenCalledWith(jasmine.objectContaining({
-                url: "/ho",
+                url: conversation.url + "/ho",
                 sync: {
                     target: conversation.id
                 },

@@ -24,12 +24,16 @@
 * layer.Message
   * Support for Deletion with either layer.Constants.DELETION_MODE.MY_DEVICES or layer.Constants.DELETION_MODE.ALL (delete for all users or just for me).  Note that deleting for just me doesn't remove me as a participant, which means that new Messages will cause the Conversation to reappear.
   * layer.Message.getConversation now supports a boolean parameter to load from server if Conversation is not cached.
+  * layer.Message.sender is now an instance of layer.Identity.
 * Persistence
-  * Conversations, Messages, Identities and unfinishedServer Requests can now be persisted between sessions.  See layer.Client.persistenceFeatures for more detail.
+  * Conversations, Messages, Identities, Announcements and incomplete server requests can now be persisted between sessions.  See layer.Client.persistenceFeatures for more detail.
 * layer.Announcement
   * Introduces the layer.Announcement class
   * Introduces the ability to create Queries to receive Announcements
-
+* layer.Identity
+    * Introduces the layer.UserIdentity and layer.ServiceIdentity clases.  A UserIdentity instance represents a user of the system that you can chat with.  A ServiceIdentity represents a Bot, or named service that posts messages and announcements.
+    * Introduces the ability to create Queries to receive Identities
+* layer.User has been removed.
 
 #### Bug Fixes
 

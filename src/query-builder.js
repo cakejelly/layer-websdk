@@ -364,6 +364,8 @@ const QueryBuilder = {
         return new AnnouncementsQuery(obj);
       case Query.Conversation:
         return new ConversationsQuery(obj);
+      case Query.Identity:
+        return new IdentitiesQuery(obj);
       default:
         return null;
     }

@@ -23,7 +23,9 @@ describe("The Client Authenticator Requests", function() {
             url: "https://duh.com"
         });
         client._initComponents();
+        client._clientAuthenticated();
         client._clientReady();
+        requests.reset();
     });
 
     afterEach(function() {
@@ -239,6 +241,10 @@ describe("The Client Authenticator Requests", function() {
     });
 
     describe("The _syncXhr() method", function() {
+        beforeEach(function() {
+           spyOn(client.syncManager, "isOnline").and.returnValue(true);
+        });
+
         it("Should fire a correct call to xhr", function() {
             // Run
             client._syncXhr({url: "fred", method: "POST", headers: {}});
@@ -600,6 +606,10 @@ describe("The Client Authenticator Requests", function() {
     });
 
     describe("The Push Token Methods", function() {
+      beforeEach(function() {
+        spyOn(client.syncManager, "isOnline").and.returnValue(true);
+      });
+
       it("Should have a working registerIOSPushToken() method", function() {
         var callback = jasmine.createSpy('callback');
         client.registerIOSPushToken({

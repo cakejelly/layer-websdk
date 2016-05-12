@@ -409,7 +409,7 @@ class ClientAuthenticator extends Root {
         global.localStorage[LOCALSTORAGE_KEYS.SESSIONDATA + this.appId] = JSON.stringify({
           sessionToken: this.sessionToken || '',
           userId: this.userId || '',
-          expires: Date.now() + 30 * 60 * 60 * 24,
+          expires: Date.now() + 30 * 60 * 60 * 24 * 1000,
         });
       } catch (e) {
         // Do nothing

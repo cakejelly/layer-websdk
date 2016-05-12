@@ -17,6 +17,33 @@ describe("The Typing Indicator Classes", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+            clientId: client.appId,
+            userId: client.userId,
+            id: "layer:///identities/" + client.userId,
+            firstName: "first",
+            lastName: "last",
+            phoneNumber: "phone",
+            emailAddress: "email",
+            metadata: {},
+            publicKey: "public",
+            avatarUrl: "avatar",
+            displayName: "display",
+            syncState: layer.Constants.SYNC_STATE.SYNCED,
+            isFullIdentity: true,
+            sessionOwner: true
+        });
+
+
+        client._clientAuthenticated();
+        getObjectsResult = [];
+        spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+            setTimeout(function() {
+                callback(getObjectsResult);
+            }, 10);
+        });
+        client._clientReady();
+        client.onlineManager.isOnline = true;
 
         client.socketManager._socket = {
             close: function() {},
@@ -54,6 +81,7 @@ describe("The Typing Indicator Classes", function() {
             it("Should connect to client ready", function() {
                 var listener = client._typingIndicators;
                 spyOn(listener, "_clientReady");
+                client.isReady = false;
                 client._clientReady();
                 expect(listener._clientReady).toHaveBeenCalledWith();
             });
@@ -671,14 +699,14 @@ describe("The Typing Indicator Classes", function() {
             });
 
             it("Should clear the old pause loop", function() {
-                publisher._pauseLoopId = 5;
+                publisher._pauseLoopId = 500;
                 publisher.state = layer.TypingIndicators.PAUSED;
 
                 // Run
                 publisher.setState(layer.TypingIndicators.PAUSED);
 
                 // Posttest
-                expect(publisher._pauseLoopId).not.toEqual(5);
+                expect(publisher._pauseLoopId).not.toEqual(500);
                 expect(publisher._pauseLoopId).not.toEqual(0);
             });
         });

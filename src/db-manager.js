@@ -55,7 +55,7 @@ class DbManager extends Root {
 
       this.client.on('identities:add', evt => this.writeIdentities(evt.identities, false));
       this.client.on('identities:change', evt => this.writeIdentities([evt.target], true));
-      this.client.on('identities:delete', evt => this.deleteObjects('identities', [evt.target]));
+      this.client.on('identities:unfollow', evt => this.deleteObjects('identities', [evt.target]));
     }
 
     this.client.syncManager.on('sync:add', evt => this.writeSyncEvents([evt.request], false));
@@ -225,6 +225,8 @@ class DbManager extends Root {
    */
   _getIdentityData(identities) {
     return identities.filter(identity => {
+      if (identity.isDestroyed || !identity.isFullIdentity) return false;
+
       if (identity._fromDB) {
         identity._fromDB = false;
         return false;
@@ -265,7 +267,7 @@ class DbManager extends Root {
    */
   writeIdentities(identities, isUpdate, callback) {
     this._writeObjects('identities',
-      this._getIdentityData(identities.filter(identity => !identity.isDestroyed && identity.isFullIdentity)), isUpdate, callback);
+      this._getIdentityData(identities), isUpdate, callback);
   }
 
   /**
@@ -307,10 +309,10 @@ class DbManager extends Root {
       })),
       position: message.position,
       sender: {
-        name: message.sender.name,
-        user_id: message.sender.userId,
-        display_name: message.sender.displayName,
-        avatar_url: message.sender.avatarUrl,
+        name: message.sender.name || '',
+        user_id: message.sender.userId || '',
+        display_name: message.sender.displayName || '',
+        avatar_url: message.sender.avatarUrl || '',
       },
       recipient_status: message.recipientStatus,
       sent_at: getDate(message.sentAt),
@@ -471,9 +473,8 @@ class DbManager extends Root {
     messages.forEach(message => this._createMessage(message));
 
     // Instantiate and Register each Conversation; will find any lastMessage that was registered.
-    conversations.forEach(conversation => this._createConversation(conversation));
     const newData = conversations
-      .map(conversation => this.client.getConversation(conversation.id))
+      .map(conversation => this._createConversation(conversation) || this.client.getConversation(conversation.id))
       .filter(conversation => conversation);
 
     // Return the data
@@ -523,11 +524,8 @@ class DbManager extends Root {
    */
   _loadMessagesResult(messages, callback) {
     // Instantiate and Register each Message
-    messages.forEach(message => this._createMessage(message));
-
-    // Retrieve all Messages registered or preregistered in this way
     const newData = messages
-      .map(message => this.client.getMessage(message.id))
+      .map(message => this._createMessage(message) || this.client.getMessage(message.id))
       .filter(message => message);
 
     // Sort the results by position
@@ -543,7 +541,7 @@ class DbManager extends Root {
    *
    * @method loadIdentities
    * @param {Function} callback
-   * @param {layer.Identityy[]} callback.result
+   * @param {layer.Identity[]} callback.result
    */
   loadIdentities(callback) {
     this._loadAll('identities', (data) => {
@@ -556,16 +554,14 @@ class DbManager extends Root {
    *
    * @method _loadIdentitiesResult
    * @private
-   * @param {Object[]} Identities
-   * @param {Object[]} messages
+   * @param {Object[]} identities
    * @param {Function} callback
-   * @param {layer.Identityy[]} callback.result
+   * @param {layer.Identity[]} callback.result
    */
   _loadIdentitiesResult(identities, callback) {
-    // Instantiate and Register each Identityy; will find any lastMessage that was registered.
-    identities.forEach(identity => this._createIdentity(identity));
+    // Instantiate and Register each Identity.
     const newData = identities
-      .map(identity => this.client.getIdentity(identity.id))
+      .map(identity => this._createIdentity(identity) || this.client.getIdentity(identity.id))
       .filter(identity => identity);
 
     // Return the data
@@ -592,7 +588,7 @@ class DbManager extends Root {
       conversation.last_message = '';
       const newConversation = this.client._createObject(conversation);
       newConversation.syncState = conversation.sync_state;
-      newConversation.lastMessage = this.client.getMessage(lastMessage) || null;
+      if (lastMessage) newConversation.lastMessage = this.client.getMessage(lastMessage) || null;
       return newConversation;
     }
   }
@@ -671,13 +667,19 @@ class DbManager extends Root {
       .filter(item => item.operation !== 'DELETE' && item.target && item.target.match(/conversations/))
       .map(item => item.target);
 
+    const identityIds = syncEvents
+      .filter(item => item.operation !== 'DELETE' && item.target && item.target.match(/identities/))
+      .map(item => item.target);
+
     // Load any Messages/Conversations that are targets of operations.
     // Call _createMessage or _createConversation on all targets found.
     this.getObjects('messages', messageIds, (messages) => {
       messages.forEach(message => this._createMessage(message));
       this.getObjects('conversations', conversationIds, (conversations) => {
         conversations.forEach(conversation => this._createConversation(conversation));
-        this._loadSyncEventResults(syncEvents, callback);
+        this.getObjects('identities', identityIds, () => {
+          this._loadSyncEventResults(syncEvents, callback);
+        });
       });
     });
   }

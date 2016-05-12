@@ -253,6 +253,7 @@ class Client extends ClientAuth {
     } else if (canLoad) {
       return Conversation.load(id, this);
     }
+    return null;
   }
 
   /**
@@ -378,6 +379,7 @@ class Client extends ClientAuth {
     } else if (canLoad) {
       return Syncable.load(id, this);
     }
+    return null;
   }
 
   /**
@@ -470,13 +472,16 @@ class Client extends ClientAuth {
   /**
    * Retrieve a identity by Identifier.
    *
-   *      var c = client.getIdentity('layer:///identities/user_id');
+   *      var i1 = client.getIdentity('layer:///identities/user_id');
+   *      var i2 = client.getIdentity('layer:///serviceidentities/service_name');
    *
    * If there is not an Identity with that id, it will return null.
    *
    * If you want it to load it from cache and then from server if not in cache, use the `canLoad` parameter.
+   * This is only supported for User Identities, not Service Identities.
+   *
    * If loading from the server, the method will return
-   * a layer.Identity instance that has no data; the identities:loaded/identities:loaded-error events
+   * a layer.UserIdentity instance that has no data; the identities:loaded/identities:loaded-error events
    * will let you know when the identity has finished/failed loading from the server.
    *
    *      var user = client.getIdentity('layer:///identities/123', true)
@@ -488,25 +493,32 @@ class Client extends ClientAuth {
    *      myrender(user);
    *
    * @method getIdentity
-   * @param  {string} id
+   * @param  {string} id - Accepts full Layer ID (layer:///identities/frodo-the-dodo) or just the UserID (frodo-the-dodo).
+   *                       If its just a UserID, its presumed to be a UserIdentity not a ServiceIdentity.
    * @param  {boolean} [canLoad=false] - Pass true to allow loading an identity from
    *                                    the server if not found
    * @return {layer.Identity}
    */
   getIdentity(id, canLoad) {
     if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
-    if (this._identitiesHash[id]) {
-      return this._identitiesHash[id];
-    } else if (canLoad) {
-      return Identity.load(id, this);
+    if (id.indexOf(UserIdentity.prefixUUID) !== 0 && id.indexOf(ServiceIdentity.prefixUUID) !== 0) {
+      id = UserIdentity.prefixUUID + id;
     }
-  }
 
-  getServiceIdentity(id) {
-    if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
-    if (this._serviceIdentitiesHash[id]) {
-      return this._serviceIdentitiesHash[id];
+    switch (Util.typeFromID(id)) {
+      case 'identities':
+        if (this._identitiesHash[id]) {
+          return this._identitiesHash[id];
+        } else if (canLoad) {
+          return Identity.load(id, this);
+        }
+        break;
+      case 'serviceidentities':
+        if (this._serviceIdentitiesHash[id]) {
+          return this._serviceIdentitiesHash[id];
+        }
     }
+    return null;
   }
 
   /**
@@ -518,6 +530,10 @@ class Client extends ClientAuth {
    * @protected
    * @param  {layer.Identity} identity
    * @returns {layer.Client} this
+   *
+   * TODO: It should be possible to add an Identity whose userId is populated, but
+   * other values are not yet loaded from the server.  Should add to _identitiesHash now
+   * but trigger `identities:add` only when its got enough data to be renderable.
    */
   _addIdentity(identity) {
     const id = identity.id;
@@ -567,7 +583,6 @@ class Client extends ClientAuth {
       case 'serviceidentities':
         if (this._serviceIdentitiesHash[id]) {
           delete this._serviceIdentitiesHash[id];
-          this._triggerAsync('identities:remove', { identities: [identity] });
         }
         break;
     }
@@ -577,17 +592,20 @@ class Client extends ClientAuth {
   /**
    * Follow this user and get Full Identity, and websocket changes on Identity.
    *
-   * @method followUser
-   * @param {string} userId
+   * @method followIdentity
+   * @param  {string} id - Accepts full Layer ID (layer:///identities/frodo-the-dodo) or just the UserID (frodo-the-dodo).
    * @returns {layer.UserIdentity}
    */
-  followUser(userId) {
-    let identity = this.getIdentity('layer:///identities/' + userId);
+  followIdentity(id) {
+    if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
+      id = UserIdentity.prefixUUID + id;
+    }
+    let identity = this.getIdentity(id);
     if (!identity) {
       identity = new UserIdentity({
-        id: 'layer:///identities/' + userId,
+        id,
         clientId: this.appId,
-        userId,
+        userId: id.substring(20),
       });
     }
     identity.follow();
@@ -597,17 +615,20 @@ class Client extends ClientAuth {
   /**
    * Unfollow this user and get only Basic Identity, and no websocket changes on Identity.
    *
-   * @method unfollowUser
-   * @param {string} userId
+   * @method unfollowIdentity
+   * @param  {string} id - Accepts full Layer ID (layer:///identities/frodo-the-dodo) or just the UserID (frodo-the-dodo).
    * @returns {layer.UserIdentity}
    */
-  unfollowUser(userId) {
-    let identity = this.getIdentity('layer:///identities/' + userId);
+  unfollowIdentity(id) {
+    if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
+      id = UserIdentity.prefixUUID + id;
+    }
+    let identity = this.getIdentity(id);
     if (!identity) {
       identity = new UserIdentity({
-        id: 'layer:///identities/' + userId,
+        id,
         clientId: this.appId,
-        userId,
+        userId: id.substring(20),
       });
     }
     identity.unfollow();
@@ -638,10 +659,10 @@ class Client extends ClientAuth {
       case 'queries':
         return this.getQuery(id);
       case 'identities':
-        return this.getIdentity(id);
       case 'serviceidentities':
-        return this.getServiceIdentity(id);
+        return this.getIdentity(id);
     }
+    return null;
   }
 
 
@@ -722,9 +743,9 @@ class Client extends ClientAuth {
    */
   _triggerLogger(eventName, evt) {
     const infoEvents = [
-      'conversations:add', 'conversations:remove',
-      'conversations:change', 'messages:add',
-      'messages:remove', 'messages:change',
+      'conversations:add', 'conversations:remove', 'conversations:change',
+      'messages:add', 'messages:remove', 'messages:change',
+      'identities:add', 'identities:remove', 'identities:change',
       'challenge', 'ready',
     ];
     if (infoEvents.indexOf(eventName) !== -1) {
@@ -880,6 +901,7 @@ class Client extends ClientAuth {
     if (this._queriesHash[id]) {
       return this._queriesHash[id];
     }
+    return null;
   }
 
   /**
@@ -1532,15 +1554,73 @@ Client._supportedEvents = [
   'messages:delete',
 
   /**
+   * An Identity has had a change in its properties.
+   *
+   * Changes occur when new data arrives from the server.
+   *
+   *      client.on('identities:change', function(evt) {
+   *          var displayNameChanges = evt.getChangesFor('displayName');
+   *          if (displayNameChanges.length) {
+   *              myView.renderStatus(evt.target);
+   *          }
+   *      });
    *
    * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.Message} evt.target
+   * @param {Object[]} evt.changes
+   * @param {Mixed} evt.changes.newValue
+   * @param {Mixed} evt.changes.oldValue
+   * @param {string} evt.changes.property - Name of the property that has changed
    */
   'identities:change',
 
+  /**
+   * Identities have been added to the Client.
+   *
+   * This event is triggered whenever a new layer.UserIdentity (Full identity or not)
+   * has been received by the Client. layer.ServiceIdentity does not trigger this event.
+   *
+          client.on('identities:add', function(evt) {
+              evt.identities.forEach(function(identity) {
+                  myView.addIdentity(identity);
+              });
+          });
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.UserIdentity[]} evt.identities
+   */
   'identities:add',
 
+  /**
+   * Identities have been removed from the Client.
+   *
+   * This does not typically occur.
+   *
+          client.on('identities:remove', function(evt) {
+              evt.identities.forEach(function(identity) {
+                  myView.addIdentity(identity);
+              });
+          });
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.UserIdentity[]} evt.identities
+   */
   'identities:remove',
-  'identities:delete',
+
+  /**
+   * An Identity has been unfollowed or deleted.
+   *
+   * We do not delete such Identities entirely from the Client as
+   * there are still Messages from these Identities to be rendered,
+   * but we do downgrade them from Full Identity to Basic Identity.
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.UserIdentity} evt.target
+   */
+  'identities:unfollow',
 
 
   /**

@@ -731,6 +731,8 @@ class Message extends Syncable {
    */
   _populateFromServer(message) {
     const client = this.getClient();
+    let senderId,
+      sender;
 
     this.id = message.id;
     this.url = message.url;
@@ -762,16 +764,17 @@ class Message extends Syncable {
     this.sentAt = new Date(message.sent_at);
     this.receivedAt = message.received_at ? new Date(message.received_at) : undefined;
 
-    let sender;
-
     if (message.sender.user_id) {
-      message.sender.id = 'layer:///identities/' + message.sender.user_id;
-      sender = client.getIdentity(message.sender.id);
+      senderId = 'layer:///identities/' + message.sender.user_id;
     } else {
-      message.sender.id = 'layer:///serviceidentities/' + message.sender.name;
-      sender = client.getServiceIdentity(message.sender.id);
+      senderId = 'layer:///serviceidentities/' + message.sender.name;
     }
-    if (!sender) sender = client._createObject(message.sender);
+    sender = client.getIdentity(senderId);
+
+    if (!sender) {
+      message.sender.id = senderId;
+      sender = client._createObject(message.sender);
+    }
     this.sender = sender;
 
     this._setSynced();
@@ -816,6 +819,7 @@ class Message extends Syncable {
   }
 
   _setupSyncObject(sync) {
+    if (sync === undefined) sync = {};
     if (sync !== false) {
       super._setupSyncObject(sync);
       if (!sync.depends) {
@@ -1076,8 +1080,6 @@ Message.prototype.readStatus = Constants.RECIPIENT_STATE.NONE;
 Message.prototype.deliveryStatus = Constants.RECIPIENT_STATE.NONE;
 
 Message.prototype._toObject = null;
-
-Message.prototype._fromDB = false;
 
 Message.eventPrefix = 'messages';
 
