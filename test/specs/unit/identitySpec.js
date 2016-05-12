@@ -428,7 +428,9 @@ describe("The Identity Class", function() {
 
         it("Should call client._addIdentity", function() {
           spyOn(client, "_addIdentity");
-          var identity = new layer.ServiceIdentity({});
+          var identity = new layer.ServiceIdentity({
+            client: client
+          });
           identity._populateFromServer(responses.serviceidentity);
           expect(client._addIdentity).toHaveBeenCalledWith(identity);
         });
