@@ -503,10 +503,6 @@ class Query extends Root {
     const lastMessage = this.data[this.data.length - 1];
     const lastMessageInstance = !lastMessage ? null : this._getInstance(lastMessage);
     const fromId = (lastMessageInstance && lastMessageInstance.isSaved() ? '&from_id=' + lastMessageInstance.id : '');
-
-    // If the last message we have loaded is already the Conversation's lastMessage, then just request data without paging,
-    // common occurence when query is populated with only a single result: conversation.lastMessage.
-    // if (conversation && conversation.lastMessage && lastMessage && lastMessage.id === conversation.lastMessage.id) fromId = '';
     const newRequest = `announcements?page_size=${pageSize}${fromId}`;
 
     // Don't repeat still firing queries
@@ -988,15 +984,18 @@ class Query extends Root {
     // Only use added messages that are part of this Conversation
     // and not already in our result set
     const list = evt.messages
+      // Filter so that we only see Messages if doing a Messages query or Announcements if doing an Announcements Query.
       .filter(message => {
         const type = Util.typeFromID(message.id);
         return type === 'messages' && this.model === MESSAGE ||
                 type === 'announcements' && this.model === ANNOUNCEMENT;
       })
+      // Filter out Messages that aren't part of this Conversation
       .filter(message => {
         const type = Util.typeFromID(message.id);
         return type === 'announcements' || message.conversationId === this._predicate;
       })
+      // Filter out Messages that are already in our data set
       .filter(message => this._getIndex(message.id) === -1)
       .map(message => this._getData(message));
 

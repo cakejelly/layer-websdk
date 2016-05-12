@@ -41,9 +41,9 @@ class Syncable extends Root {
   }
 
   /**
-   * Load this conversation from the server.
+   * Load this resource from the server.
    *
-   * Called from the static layer.Conversation.load() method
+   * Called from the static layer.Syncable.load() method
    *
    * @method _load
    * @private
