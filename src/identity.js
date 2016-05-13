@@ -337,6 +337,7 @@ UserIdentity.inObjectIgnore = Identity.inObjectIgnore;
 UserIdentity.bubbleEventParent = 'getClient';
 
 UserIdentity._supportedEvents = [
+  'identities:change',
   'identities:loaded',
   'identities:loaded-error',
   'identities:unfollow',
