@@ -137,7 +137,7 @@ class Client extends ClientAuth {
   _clientReady() {
     if (!this.user) {
       // TODO: This should account for persistence; DBManager is not yet listening at this point
-      const user = UserIdentity.load('layer:///identities/' + this.userId, this);
+      const user = UserIdentity.load('layer:///identities/' + encodeURIComponent(this.userId), this);
       user.sessionOwner = true;
       user.on('identities:loaded', () => {
         this.user = user;
@@ -502,7 +502,7 @@ class Client extends ClientAuth {
   getIdentity(id, canLoad) {
     if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
     if (id.indexOf(UserIdentity.prefixUUID) !== 0 && id.indexOf(ServiceIdentity.prefixUUID) !== 0) {
-      id = UserIdentity.prefixUUID + id;
+      id = UserIdentity.prefixUUID + encodeURIComponent(id);
     }
 
     switch (Util.typeFromID(id)) {
@@ -598,7 +598,7 @@ class Client extends ClientAuth {
    */
   followIdentity(id) {
     if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
-      id = UserIdentity.prefixUUID + id;
+      id = UserIdentity.prefixUUID + encodeURIComponent(id);
     }
     let identity = this.getIdentity(id);
     if (!identity) {
@@ -621,7 +621,7 @@ class Client extends ClientAuth {
    */
   unfollowIdentity(id) {
     if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
-      id = UserIdentity.prefixUUID + id;
+      id = UserIdentity.prefixUUID + encodeURIComponent(id);
     }
     let identity = this.getIdentity(id);
     if (!identity) {
