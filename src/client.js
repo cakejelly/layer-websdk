@@ -1554,6 +1554,15 @@ Client._supportedEvents = [
   'messages:delete',
 
   /**
+   * A call to layer.Identity.load has completed successfully
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.Message} evt.target
+   */
+  'identities:loaded',
+
+  /**
    * An Identity has had a change in its properties.
    *
    * Changes occur when new data arrives from the server.
