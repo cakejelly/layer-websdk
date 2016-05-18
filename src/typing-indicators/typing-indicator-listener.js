@@ -19,7 +19,7 @@
 const Root = require('../root');
 const ClientRegistry = require('../client-registry');
 
-const {STARTED, PAUSED, FINISHED} = require('./typing-indicators');
+const { STARTED, PAUSED, FINISHED } = require('./typing-indicators');
 class TypingIndicatorListener extends Root {
 
   /**
@@ -88,6 +88,7 @@ class TypingIndicatorListener extends Root {
 
     if (this._isRelevantEvent(evt)) {
       const userId = evt.body.data.user_id;
+      const identity = this._getClient().getIdentity(userId, true);
       const state = evt.body.data.action;
       const conversationId = evt.body.object.id;
       let stateEntry = this.state[conversationId];
@@ -100,7 +101,8 @@ class TypingIndicatorListener extends Root {
       }
       stateEntry.users[userId] = {
         startTime: Date.now(),
-        state: state,
+        state,
+        identity,
       };
       if (stateEntry.users[userId].state === FINISHED) {
         delete stateEntry.users[userId];
@@ -110,8 +112,8 @@ class TypingIndicatorListener extends Root {
 
       this.trigger('typing-indicator-change', {
         conversationId,
-        typing: stateEntry.typing,
-        paused: stateEntry.paused,
+        typing: stateEntry.typing.map(id => stateEntry.users[id].identity.toObject()),
+        paused: stateEntry.paused.map(id => stateEntry.users[id].identity.toObject()),
       });
     }
   }
@@ -179,15 +181,15 @@ class TypingIndicatorListener extends Root {
 
     conversationIds.forEach(id => {
       const state = this.state[id];
-      Object.keys(this.state[id].users)
+      Object.keys(state.users)
         .forEach((userId) => {
           if (Date.now() >= state.users[userId].startTime + 6000) {
             this._updateState(state, FINISHED, userId);
             delete state.users[userId];
             this.trigger('typing-indicator-change', {
               conversationId: id,
-              typing: state.typing,
-              paused: state.paused,
+              typing: state.typing.map(aUserId => state.users[aUserId].identity.toObject()),
+              paused: state.paused.map(aUserId => state.users[aUserId].identity.toObject()),
             });
           }
         });

@@ -239,6 +239,27 @@ class Syncable extends Root {
   }
 
   /**
+   * Returns a plain object.
+   *
+   * Object will have all the same public properties as this
+   * Syncable instance.  New object is returned any time
+   * any of this object's properties change.
+   *
+   * @method toObject
+   * @return {Object} POJO version of this object.
+   */
+  toObject() {
+    if (!this._toObject) {
+      this._toObject = super.toObject();
+      this._toObject.isNew = this.isNew();
+      this._toObject.isSaving = this.isSaving();
+      this._toObject.isSaved = this.isSaved();
+      this._toObject.isSynced = this.isSynced();
+    }
+    return this._toObject;
+  }
+
+  /**
    * Object is new, and is not yet queued for syncing
    *
    * @method isNew
