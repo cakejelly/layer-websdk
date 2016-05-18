@@ -59,6 +59,16 @@ class Identity extends Syncable {
     if (client) client._removeIdentity(this);
     super.destroy();
   }
+
+  _triggerAsync(evtName, args) {
+    this._clearObject();
+    super._triggerAsync(evtName, args);
+  }
+
+  trigger(evtName, args) {
+    this._clearObject();
+    super.trigger(evtName, args);
+  }
 }
 
 /**

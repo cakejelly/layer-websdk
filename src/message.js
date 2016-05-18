@@ -864,10 +864,6 @@ class Message extends Syncable {
     if (!this._toObject) {
       this._toObject = super.toObject();
       this._toObject.recipientStatus = Util.clone(this.recipientStatus);
-      this._toObject.isNew = this.isNew();
-      this._toObject.isSaving = this.isSaving();
-      this._toObject.isSaved = this.isSaved();
-      this._toObject.isSynced = this.isSynced();
     }
     return this._toObject;
   }
@@ -982,7 +978,7 @@ Message.prototype.receivedAt = null;
  *        {message.sender.displayName || message.sender.name}
  *      </span>
  *
- * @type {Object}
+ * @type {layer.Identity}
  */
 Message.prototype.sender = null;
 

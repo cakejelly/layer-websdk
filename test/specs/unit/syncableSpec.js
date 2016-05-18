@@ -593,4 +593,28 @@ describe("The Syncable Class", function() {
         expect(message.isSaved()).toEqual(true);
       });
     });
+
+    describe("The toObject() method", function() {
+        var obj;
+        beforeEach(function() {
+            obj = new layer.Syncable({
+            });
+        });
+
+        afterEach(function() {
+            if (!obj.isDestroyed) obj.destroy();
+        });
+
+        it("Should return cached value", function() {
+            obj._toObject = "fred";
+            expect(obj.toObject()).toEqual("fred");
+        });
+
+        it("Should return a isNew, isSaved, isSaving, isSynced", function() {
+            expect(obj.toObject().isNew).toEqual(true);
+            expect(obj.toObject().isSaved).toEqual(false);
+            expect(obj.toObject().isSaving).toEqual(false);
+            expect(obj.toObject().isSynced).toEqual(false);
+        });
+    });
 });

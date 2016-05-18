@@ -1025,10 +1025,6 @@ class Conversation extends Syncable {
     if (!this._toObject) {
       this._toObject = super.toObject();
       this._toObject.metadata = Util.clone(this.metadata);
-      this._toObject.isNew = this.isNew();
-      this._toObject.isSaving = this.isSaving();
-      this._toObject.isSaved = this.isSaved();
-      this._toObject.isSynced = this.isSynced();
     }
     return this._toObject;
   }
