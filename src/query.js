@@ -584,6 +584,44 @@ class Query extends Root {
     }
   }
 
+  /**
+   * Get Identities from the server.
+   *
+   * @method _runIdentities
+   * @private
+   * @param  {number} pageSize - Number of new results to request
+   */
+  _runIdentity(pageSize) {
+    // If no data, retrieve data from db cache in parallel with loading data from server
+    if (this.isReset) {
+      this.client.dbManager.loadIdentities((identities) => {
+        if (identities.length) this._appendResults({ data: identities });
+      });
+    }
+    this.isReset = false;
+
+    // This is a pagination rather than an initial request if there is already data; get the fromId
+    // which is the id of the last result.
+    const lastIdentity = this.data[this.data.length - 1];
+    const fromId = (lastIdentity ? '&from_id=' + lastIdentity.id : '');
+
+    // If the last message we have loaded is already the Conversation's lastMessage, then just request data without paging,
+    // common occurence when query is populated with only a single result: conversation.lastMessage.
+    // if (conversation && conversation.lastMessage && lastMessage && lastMessage.id === conversation.lastMessage.id) fromId = '';
+    const newRequest = `identities?page_size=${pageSize}${fromId}`;
+
+    // Don't repeat still firing queries
+    if (newRequest !== this._firingRequest) {
+      this.isFiring = true;
+      this._firingRequest = newRequest;
+      this.client.xhr({
+        url: newRequest,
+        method: 'GET',
+        sync: false,
+      }, results => this._processRunResults(results, newRequest));
+    }
+  }
+
 
   /**
    * Process the results of the `_run` method; calls __appendResults.

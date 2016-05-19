@@ -71,7 +71,7 @@ class Syncable extends Root {
   }
 
   /**
-   * Any xhr method called on this Object uses the Object's url.
+   * Fire an XHR request using the URL for this resource.
    *
    * For more info on xhr method parameters see {@link layer.ClientAuthenticator#xhr}
    *
