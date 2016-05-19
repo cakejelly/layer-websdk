@@ -320,6 +320,7 @@ class DbManager extends Root {
       received_at: getDate(message.receivedAt),
       conversation: message.constructor.prefixUUID === 'layer:///announcements/' ? 'announcement' : message.conversationId,
       sync_state: message.syncState,
+      is_unread: message.isUnread,
     }));
   }
 
