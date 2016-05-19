@@ -247,6 +247,7 @@ class DbManager extends Root {
         metadata: identity.metadata,
         public_key: identity.publicKey,
         phone_number: identity.phoneNumber,
+        email_address: identity.emailAddress,
         sync_state: identity.syncState,
       };
       return item;

@@ -194,16 +194,18 @@ class Query extends Root {
     } else {
       options = args[0];
     }
+
+    super(options);
+
     if ('paginationWindow' in options) {
       const paginationWindow = options.paginationWindow;
-      options.paginationWindow = Math.min(Query.MaxPageSize, options.paginationWindow);
+      this.paginationWindow = Math.min(this._getMaxPageSize(), options.paginationWindow);
       if (options.paginationWindow !== paginationWindow) {
         Logger.warn(`paginationWindow value ${paginationWindow} in Query constructor ` +
-          `excedes Query.MaxPageSize of ${Query.MaxPageSize}`);
+          `excedes Query.MaxPageSize of ${this._getMaxPageSize()}`);
       }
     }
 
-    super(options);
     this.data = [];
     this._initialPaginationWindow = this.paginationWindow;
     if (!this.client) throw new Error(LayerError.dictionary.clientMissing);
@@ -226,6 +228,17 @@ class Query extends Root {
     this.client._removeQuery(this);
     this.data = null;
     super.destroy();
+  }
+
+  /**
+   * Get the maximum number of items allowed in a page
+   *
+   * @method
+   * @private
+   * @returns {number}
+   */
+  _getMaxPageSize() {
+    return this.model === Query.Identity ? Query.MaxPageSizeIdentity : Query.MaxPageSize;
   }
 
   /**
@@ -254,10 +267,10 @@ class Query extends Root {
     const optionsBuilt = (typeof options.build === 'function') ? options.build() : options;
 
     if ('paginationWindow' in optionsBuilt && this.paginationWindow !== optionsBuilt.paginationWindow) {
-      this.paginationWindow = Math.min(Query.MaxPageSize + this.size, optionsBuilt.paginationWindow);
+      this.paginationWindow = Math.min(this._getMaxPageSize() + this.size, optionsBuilt.paginationWindow);
       if (this.paginationWindow < optionsBuilt.paginationWindow) {
         Logger.warn(`paginationWindow value ${optionsBuilt.paginationWindow} in Query.update() ` +
-          `increases size greater than Query.MaxPageSize of ${Query.MaxPageSize}`);
+          `increases size greater than Query.MaxPageSize of ${this._getMaxPageSize()}`);
       }
       needsRefresh = true;
     }
@@ -322,7 +335,7 @@ class Query extends Root {
    */
   _run() {
     // Find the number of items we need to request.
-    const pageSize = Math.min(this.paginationWindow - this.size, Query.MaxPageSize);
+    const pageSize = Math.min(this.paginationWindow - this.size, this._getMaxPageSize());
 
     // If there is a reduction in pagination window, then this variable will be negative, and we can shrink
     // the data.
@@ -1299,6 +1312,14 @@ Query.InstanceDataType = 'instance';
  * @static
  */
 Query.MaxPageSize = 100;
+
+/**
+ * Set the maximum page size for Identity queries.
+ *
+ * @type {number}
+ * @static
+ */
+Query.MaxPageSizeIdentity = 500;
 
 /**
  * Access the number of results currently loaded.
