@@ -421,7 +421,9 @@ class Message extends Syncable {
    */
   __updateIsRead(value) {
     if (value) {
-      this._sendReceipt(Constants.RECEIPT_STATE.READ);
+      if (!this._inPopulateFromServer) {
+        this._sendReceipt(Constants.RECEIPT_STATE.READ);
+      }
       this._triggerAsync('messages:read');
       const conversation = this.getConversation(false);
       if (conversation) conversation.unreadCount--;
@@ -730,6 +732,7 @@ class Message extends Syncable {
    * @param  {Object} m - Server description of the message
    */
   _populateFromServer(message) {
+    this._inPopulateFromServer = true;
     const client = this.getClient();
     let senderId,
       sender;
@@ -786,6 +789,7 @@ class Message extends Syncable {
         property: 'position',
       });
     }
+    this._inPopulateFromServer = false;
   }
 
   /**
@@ -1076,6 +1080,8 @@ Message.prototype.readStatus = Constants.RECIPIENT_STATE.NONE;
 Message.prototype.deliveryStatus = Constants.RECIPIENT_STATE.NONE;
 
 Message.prototype._toObject = null;
+
+Message.prototype._inPopulateFromServer = false;
 
 Message.eventPrefix = 'messages';
 
