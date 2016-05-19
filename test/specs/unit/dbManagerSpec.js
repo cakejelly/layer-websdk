@@ -331,6 +331,7 @@ describe("The DbManager Class", function() {
           sent_at: message.sentAt.toISOString(),
           received_at: message.receivedAt.toISOString(),
           conversation: message.conversationId,
+          is_unread: false,
           sender: {
             user_id: message.sender.userId || '',
             name: '',
@@ -360,6 +361,7 @@ describe("The DbManager Class", function() {
           recipient_status: message.recipientStatus,
           sent_at: message.sentAt.toISOString(),
           received_at: message.receivedAt.toISOString(),
+          is_unread: true,
           conversation: 'announcement',
           sender: {
             user_id: '',
@@ -452,6 +454,7 @@ describe("The DbManager Class", function() {
           first_name: identity.firstName,
           last_name: identity.lastName,
           display_name: identity.displayName,
+          email_address: identity.emailAddress,
           avatar_url: identity.avatarUrl,
           metadata: identity.metadata,
           public_key: identity.publicKey,
