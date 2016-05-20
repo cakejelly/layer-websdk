@@ -146,19 +146,6 @@ describe("The Query Class", function() {
             layer.Query.prototype._run = tmp;
         });
 
-        it("Should initialize with isReset", function() {
-            // Setup
-            client.isReady = false;
-
-            // Run
-            var query = new layer.Query({
-                client: client
-            });
-
-            // Posttest
-            expect(query.isReset).toBe(true);
-        });
-
         // Integration test verifies that new Conversation in the Client
         // triggers _handleConversationEvents in Query
         it("Should setup change event handlers", function() {
@@ -320,12 +307,6 @@ describe("The Query Class", function() {
             query._predicate = "hey";
             query._reset();
             expect(query._predicate).toEqual(null);
-        });
-
-        it("Should set isReset", function() {
-           query.isReset = false;
-           query._reset();
-           expect(query.isReset).toBe(true);
         });
 
         it("Should trigger a reset change", function() {
@@ -527,12 +508,6 @@ describe("The Query Class", function() {
           expect(client.dbManager.loadConversations).not.toHaveBeenCalled();
         });
 
-        it("Should clear isReset", function() {
-          query._reset();
-          query._runConversation();
-          expect(query.isReset).toBe(false);
-        });
-
         it("Should set isFiring to true", function() {
             query.isFiring = false;
             query._runConversation();
@@ -662,12 +637,6 @@ describe("The Query Class", function() {
           expect(client.dbManager.loadAnnouncements).toHaveBeenCalled();
         });
 
-        it("Should clear isReset", function() {
-          query._reset();
-          query._runAnnouncement(141);
-          expect(query.isReset).toBe(false);
-        });
-
         it("Should skip call dbManager.loadAnnouncements if its not a new query", function() {
           query._reset();
           query._runAnnouncement(100);
@@ -767,12 +736,6 @@ describe("The Query Class", function() {
           spyOn(client.dbManager, "loadMessages");
           query._runMessage(140);
           expect(client.dbManager.loadMessages).toHaveBeenCalled();
-        });
-
-        it("Should clear isReset", function() {
-          query._reset();
-          query._runMessage(141);
-          expect(query.isReset).toBe(false);
         });
 
         it("Should skip call dbManager.loadMessages if its not a new query", function() {
@@ -921,12 +884,6 @@ describe("The Query Class", function() {
           spyOn(client.dbManager, "loadIdentities");
           query._runIdentity(140);
           expect(client.dbManager.loadIdentities).toHaveBeenCalled();
-        });
-
-        it("Should clear isReset", function() {
-          query._reset();
-          query._runIdentity(141);
-          expect(query.isReset).toBe(false);
         });
 
         it("Should skip call dbManager.loadIdentities if its not a new query", function() {

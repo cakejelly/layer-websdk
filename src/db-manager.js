@@ -10,7 +10,7 @@
  * @protected
  */
 
-const DB_VERSION = 15;
+const DB_VERSION = 18;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -21,7 +21,29 @@ function getDate(inDate) {
   return inDate ? inDate.toISOString() : null;
 }
 
-const TABLES = ['conversations', 'messages', 'identities', 'syncQueue'];
+const TABLES = [
+  {
+    tableName: 'conversations',
+    indexes: {
+      created_at: ['created_at'],
+      last_message_sent: ['last_message_sent']
+    },
+  },
+  {
+    tableName: 'messages',
+    indexes: {
+      conversation: ['conversation', 'position']
+    },
+  },
+  {
+    tableName: 'identities',
+    indexes: {},
+  },
+  {
+    tableName: 'syncQueue',
+    indexes: {},
+  },
+];
 
 class DbManager extends Root {
 
@@ -141,21 +163,19 @@ class DbManager extends Root {
       }
     }
 
-    TABLES.forEach((tableName) => {
+    TABLES.forEach((tableDef) => {
       try {
-        db.deleteObjectStore(tableName);
+        db.deleteObjectStore(tableDef.tableName);
       } catch (e) {
         // Noop
       }
       try {
-        const store = db.createObjectStore(tableName, { keyPath: 'id' });
-        if (tableName === 'messages') {
-          store.createIndex('conversation', 'conversation', { unique: false });
-        }
+        const store = db.createObjectStore(tableDef.tableName, { keyPath: 'id' });
+        Object.keys(tableDef.indexes).forEach(indexName => store.createIndex(indexName, tableDef.indexes[indexName], { unique: false }));
         store.transaction.oncomplete = onComplete;
       } catch (e) {
         // Noop
-        logger.error(`Failed to create object store ${tableName}`, e);
+        logger.error(`Failed to create object store ${tableDef.tableName}`, e);
       }
     });
   }
@@ -192,6 +212,7 @@ class DbManager extends Root {
         metadata: conversation.metadata,
         unread_message_count: conversation.unreadCount,
         last_message: conversation.lastMessage ? conversation.lastMessage.id : '',
+        last_message_sent: conversation.lastMessage ? getDate(conversation.lastMessage.sentAt) : getDate(conversation.createdAt),
         sync_state: conversation.syncState,
       };
       return item;
@@ -445,9 +466,25 @@ class DbManager extends Root {
    * @param {Function} callback
    * @param {layer.Conversation[]} callback.result
    */
-  loadConversations(callback) {
+  loadConversations(sortBy, fromId, pageSize, callback) {
+    let sortIndex,
+      range;
+    const fromConversation = fromId ? this.client.getConversation(fromId) : null;
+    if (sortBy === 'last_message') {
+      sortIndex = 'last_message_sent';
+      if (fromConversation) {
+        range = window.IDBKeyRange.upperBound([fromConversation.lastMessage ?
+          getDate(fromConversation.lastMessage.sentAt) : getDate(fromConversation.createdAt)]);
+      }
+    } else {
+      sortIndex = 'created_at';
+      if (fromConversation) {
+        range = window.IDBKeyRange.upperBound([getDate(fromConversation.createdAt)]);
+      }
+    }
+
     // Step 1: Get all Conversations
-    this._loadAll('conversations', (data) => {
+    this._loadByIndex('conversations', sortIndex, range, Boolean(fromId), pageSize, (data) => {
       // Step 2: Gather all Message IDs needed to initialize these Conversation's lastMessage properties.
       const messagesToLoad = data
         .map(item => item.last_message)
@@ -493,8 +530,10 @@ class DbManager extends Root {
    * @param {Function} callback
    * @param {layer.Message[]} callback.result
    */
-  loadMessages(conversationId, callback) {
-    this._loadByIndex('messages', 'conversation', conversationId, data => {
+  loadMessages(conversationId, fromId, pageSize, callback) {
+    const fromMessage = fromId ? this.client.getMessage(fromId) : null;
+    const query = window.IDBKeyRange.bound([conversationId, 0], [conversationId, fromMessage ? fromMessage.position : Number.MAX_SAFE_INTEGER]);
+    this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, data => {
       this._loadMessagesResult(data, callback);
     });
   }
@@ -506,8 +545,10 @@ class DbManager extends Root {
    * @param {Function} callback
    * @param {layer.Announcement[]} callback.result
    */
-  loadAnnouncements(callback) {
-    this._loadByIndex('messages', 'conversation', 'announcement', data => {
+  loadAnnouncements(fromId, pageSize, callback) {
+    const fromMessage = fromId ? this.client.getMessage(fromId) : null;
+    const query = window.IDBKeyRange.bound(['announcement', 0], ['announcement', fromMessage ? fromMessage.position : Number.MAX_SAFE_INTEGER]);
+    this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, data => {
       this._loadMessagesResult(data, callback);
     });
   }
@@ -529,9 +570,6 @@ class DbManager extends Root {
     const newData = messages
       .map(message => this._createMessage(message) || this.client.getMessage(message.id))
       .filter(message => message);
-
-    // Sort the results by position
-    Util.sortBy(newData, item => item.position);
 
     // Return the results
     if (callback) callback(newData);
@@ -770,20 +808,28 @@ class DbManager extends Root {
    * @param {Function} callback
    * @param {Object[]} callback.result
    */
-  _loadByIndex(tableName, indexName, indexValue, callback) {
+  _loadByIndex(tableName, indexName, range, isFromId, pageSize, callback) {
     if (!this.tables[tableName]) return callback([]);
+    let shouldSkipNext = isFromId;
     this.onOpen(() => {
       const data = [];
-      const range = window.IDBKeyRange.only(indexValue);
       this.db.transaction([tableName], 'readonly')
           .objectStore(tableName)
           .index(indexName)
-          .openCursor(range)
+          .openCursor(range, 'prev')
           .onsuccess = (evt) => {
             const cursor = evt.target.result;
             if (cursor) {
-              data.push(cursor.value);
-              cursor.continue();
+              if (shouldSkipNext) {
+                shouldSkipNext = false;
+              } else {
+                data.push(cursor.value);
+              }
+              if (pageSize && data.length >= pageSize) {
+                callback(data);
+              } else {
+                cursor.continue();
+              }
             } else {
               if (!this.isDestroyed) callback(data);
             }
