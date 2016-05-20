@@ -10,7 +10,7 @@
  * @protected
  */
 
-const DB_VERSION = 14;
+const DB_VERSION = 18;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -21,7 +21,29 @@ function getDate(inDate) {
   return inDate ? inDate.toISOString() : null;
 }
 
-const TABLES = ['conversations', 'messages', 'identities', 'syncQueue'];
+const TABLES = [
+  {
+    tableName: 'conversations',
+    indexes: {
+      created_at: ['created_at'],
+      last_message_sent: ['last_message_sent']
+    },
+  },
+  {
+    tableName: 'messages',
+    indexes: {
+      conversation: ['conversation', 'position']
+    },
+  },
+  {
+    tableName: 'identities',
+    indexes: {},
+  },
+  {
+    tableName: 'syncQueue',
+    indexes: {},
+  },
+];
 
 class DbManager extends Root {
 
@@ -52,6 +74,10 @@ class DbManager extends Root {
       this.client.on('messages:add', evt => this.writeMessages(evt.messages, false));
       this.client.on('messages:change', evt => this.writeMessages([evt.target], true));
       this.client.on('messages:delete', evt => this.deleteObjects('messages', [evt.target]));
+
+      this.client.on('identities:add', evt => this.writeIdentities(evt.identities, false));
+      this.client.on('identities:change', evt => this.writeIdentities([evt.target], true));
+      this.client.on('identities:unfollow', evt => this.deleteObjects('identities', [evt.target]));
     }
 
     this.client.syncManager.on('sync:add', evt => this.writeSyncEvents([evt.request], false));
@@ -137,21 +163,19 @@ class DbManager extends Root {
       }
     }
 
-    TABLES.forEach((tableName) => {
+    TABLES.forEach((tableDef) => {
       try {
-        db.deleteObjectStore(tableName);
+        db.deleteObjectStore(tableDef.tableName);
       } catch (e) {
         // Noop
       }
       try {
-        const store = db.createObjectStore(tableName, { keyPath: 'id' });
-        if (tableName === 'messages') {
-          store.createIndex('conversation', 'conversation', { unique: false });
-        }
+        const store = db.createObjectStore(tableDef.tableName, { keyPath: 'id' });
+        Object.keys(tableDef.indexes).forEach(indexName => store.createIndex(indexName, tableDef.indexes[indexName], { unique: false }));
         store.transaction.oncomplete = onComplete;
       } catch (e) {
         // Noop
-        logger.error(`Failed to create object store ${tableName}`, e);
+        logger.error(`Failed to create object store ${tableDef.tableName}`, e);
       }
     });
   }
@@ -188,6 +212,7 @@ class DbManager extends Root {
         metadata: conversation.metadata,
         unread_message_count: conversation.unreadCount,
         last_message: conversation.lastMessage ? conversation.lastMessage.id : '',
+        last_message_sent: conversation.lastMessage ? getDate(conversation.lastMessage.sentAt) : getDate(conversation.createdAt),
         sync_state: conversation.syncState,
       };
       return item;
@@ -209,6 +234,62 @@ class DbManager extends Root {
   writeConversations(conversations, isUpdate, callback) {
     this._writeObjects('conversations',
       this._getConversationData(conversations.filter(conversation => !conversation.isDestroyed)), isUpdate, callback);
+  }
+
+  /**
+   * Convert array of Identity instances into Identity DB Entries.
+   *
+   * @method _getIdentityData
+   * @private
+   * @param {layer.Identity[]} identities
+   * @return {Object[]} identities
+   */
+  _getIdentityData(identities) {
+    return identities.filter(identity => {
+      if (identity.isDestroyed || !identity.isFullIdentity) return false;
+
+      if (identity._fromDB) {
+        identity._fromDB = false;
+        return false;
+      } else if (identity.isLoading) {
+        return false;
+      } else {
+        return true;
+      }
+    }).map(identity => {
+      const item = {
+        id: identity.id,
+        url: identity.url,
+        user_id: identity.userId,
+        first_name: identity.firstName,
+        last_name: identity.lastName,
+        display_name: identity.displayName,
+        avatar_url: identity.avatarUrl,
+        metadata: identity.metadata,
+        public_key: identity.publicKey,
+        phone_number: identity.phoneNumber,
+        email_address: identity.emailAddress,
+        sync_state: identity.syncState,
+      };
+      return item;
+    });
+  }
+
+  /**
+   * Writes an array of Identities to the Database.
+   *
+   * There are times when you will not know if this is an Insert or Update operation;
+   * if there is uncertainy, set `isUpdate` to false, and the correct end result will
+   * still be achieved (but less efficiently).
+   *
+   * @method writeIdentities
+   * @param {layer.Identity[]} identities - Array of Identities to write
+   * @param {boolean} isUpdate - If true, then update an entry; if false, insert an entry... and if one is found to already exist, update it.
+   * @param {Function} [callback]
+   */
+  writeIdentities(identities, isUpdate, callback) {
+    this._writeObjects('identities',
+      this._getIdentityData(identities), isUpdate, callback);
   }
 
   /**
@@ -250,14 +331,17 @@ class DbManager extends Root {
       })),
       position: message.position,
       sender: {
-        name: message.sender.name,
-        user_id: message.sender.userId,
+        name: message.sender.name || '',
+        user_id: message.sender.userId || '',
+        display_name: message.sender.displayName || '',
+        avatar_url: message.sender.avatarUrl || '',
       },
       recipient_status: message.recipientStatus,
       sent_at: getDate(message.sentAt),
       received_at: getDate(message.receivedAt),
       conversation: message.constructor.prefixUUID === 'layer:///announcements/' ? 'announcement' : message.conversationId,
       sync_state: message.syncState,
+      is_unread: message.isUnread,
     }));
   }
 
@@ -323,6 +407,7 @@ class DbManager extends Root {
     this._writeObjects('syncQueue', this._getSyncEventData(syncEvents), isUpdate, callback);
   }
 
+
   /**
    * Write an array of data to the specified Database table.
    *
@@ -334,7 +419,6 @@ class DbManager extends Root {
    * @protected
    */
   _writeObjects(tableName, data, isUpdate, callback) {
-
     // Just quit if no data to write
     if (!data.length) {
       if (callback) callback();
@@ -379,12 +463,31 @@ class DbManager extends Root {
    * Load all conversations from the database.
    *
    * @method loadConversations
-   * @param {Function} callback
+   * @param {string} sortBy       - One of 'last_message' or 'created_at'; always sorts in DESC order
+   * @param {string} [fromId=]    - For pagination, provide the conversationId to get Conversations after
+   * @param {number} [pageSize=]  - To limit the number of results, provide a number for how many results to return.
+   * @param {Function} callback   - Callback for getting results
    * @param {layer.Conversation[]} callback.result
    */
-  loadConversations(callback) {
+  loadConversations(sortBy, fromId, pageSize, callback) {
+    let sortIndex,
+      range;
+    const fromConversation = fromId ? this.client.getConversation(fromId) : null;
+    if (sortBy === 'last_message') {
+      sortIndex = 'last_message_sent';
+      if (fromConversation) {
+        range = window.IDBKeyRange.upperBound([fromConversation.lastMessage ?
+          getDate(fromConversation.lastMessage.sentAt) : getDate(fromConversation.createdAt)]);
+      }
+    } else {
+      sortIndex = 'created_at';
+      if (fromConversation) {
+        range = window.IDBKeyRange.upperBound([getDate(fromConversation.createdAt)]);
+      }
+    }
+
     // Step 1: Get all Conversations
-    this._loadAll('conversations', (data) => {
+    this._loadByIndex('conversations', sortIndex, range, Boolean(fromId), pageSize, (data) => {
       // Step 2: Gather all Message IDs needed to initialize these Conversation's lastMessage properties.
       const messagesToLoad = data
         .map(item => item.last_message)
@@ -412,9 +515,8 @@ class DbManager extends Root {
     messages.forEach(message => this._createMessage(message));
 
     // Instantiate and Register each Conversation; will find any lastMessage that was registered.
-    conversations.forEach(conversation => this._createConversation(conversation));
     const newData = conversations
-      .map(conversation => this.client.getConversation(conversation.id))
+      .map(conversation => this._createConversation(conversation) || this.client.getConversation(conversation.id))
       .filter(conversation => conversation);
 
     // Return the data
@@ -428,11 +530,15 @@ class DbManager extends Root {
    *
    * @method loadMessages
    * @param {string} conversationId - ID of the Conversation whose Messages are of interest.
-   * @param {Function} callback
+   * @param {string} [fromId=]    - For pagination, provide the messageId to get Messages after
+   * @param {number} [pageSize=]  - To limit the number of results, provide a number for how many results to return.
+   * @param {Function} callback   - Callback for getting results
    * @param {layer.Message[]} callback.result
    */
-  loadMessages(conversationId, callback) {
-    this._loadByIndex('messages', 'conversation', conversationId, data => {
+  loadMessages(conversationId, fromId, pageSize, callback) {
+    const fromMessage = fromId ? this.client.getMessage(fromId) : null;
+    const query = window.IDBKeyRange.bound([conversationId, 0], [conversationId, fromMessage ? fromMessage.position : Number.MAX_SAFE_INTEGER]);
+    this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, (data) => {
       this._loadMessagesResult(data, callback);
     });
   }
@@ -441,11 +547,15 @@ class DbManager extends Root {
    * Load all Announcements from the database.
    *
    * @method loadAnnouncements
+   * @param {string} [fromId=]    - For pagination, provide the messageId to get Announcements after
+   * @param {number} [pageSize=]  - To limit the number of results, provide a number for how many results to return.
    * @param {Function} callback
    * @param {layer.Announcement[]} callback.result
    */
-  loadAnnouncements(callback) {
-    this._loadByIndex('messages', 'conversation', 'announcement', data => {
+  loadAnnouncements(fromId, pageSize, callback) {
+    const fromMessage = fromId ? this.client.getMessage(fromId) : null;
+    const query = window.IDBKeyRange.bound(['announcement', 0], ['announcement', fromMessage ? fromMessage.position : Number.MAX_SAFE_INTEGER]);
+    this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, (data) => {
       this._loadMessagesResult(data, callback);
     });
   }
@@ -464,20 +574,46 @@ class DbManager extends Root {
    */
   _loadMessagesResult(messages, callback) {
     // Instantiate and Register each Message
-    messages.forEach(message => this._createMessage(message));
-
-    // Retrieve all Messages registered or preregistered in this way
     const newData = messages
-      .map(message => this.client.getMessage(message.id))
+      .map(message => this._createMessage(message) || this.client.getMessage(message.id))
       .filter(message => message);
-
-    // Sort the results by position
-    Util.sortBy(newData, item => item.position);
 
     // Return the results
     if (callback) callback(newData);
   }
 
+
+  /**
+   * Load all Identities from the database.
+   *
+   * @method loadIdentities
+   * @param {Function} callback
+   * @param {layer.Identity[]} callback.result
+   */
+  loadIdentities(callback) {
+    this._loadAll('identities', (data) => {
+      this._loadIdentitiesResult(data, callback);
+    });
+  }
+
+  /**
+   * Assemble all LastMessages and Identityy POJOs into layer.Message and layer.Identityy instances.
+   *
+   * @method _loadIdentitiesResult
+   * @private
+   * @param {Object[]} identities
+   * @param {Function} callback
+   * @param {layer.Identity[]} callback.result
+   */
+  _loadIdentitiesResult(identities, callback) {
+    // Instantiate and Register each Identity.
+    const newData = identities
+      .map(identity => this._createIdentity(identity) || this.client.getIdentity(identity.id))
+      .filter(identity => identity);
+
+    // Return the data
+    if (callback) callback(newData);
+  }
 
   /**
    * Instantiate and Register the Conversation from a conversation DB Entry.
@@ -499,7 +635,7 @@ class DbManager extends Root {
       conversation.last_message = '';
       const newConversation = this.client._createObject(conversation);
       newConversation.syncState = conversation.sync_state;
-      newConversation.lastMessage = this.client.getMessage(lastMessage) || null;
+      if (lastMessage) newConversation.lastMessage = this.client.getMessage(lastMessage) || null;
       return newConversation;
     }
   }
@@ -521,6 +657,25 @@ class DbManager extends Root {
       const newMessage = this.client._createObject(message);
       newMessage.syncState = message.sync_state;
       return newMessage;
+    }
+  }
+
+  /**
+   * Instantiate and Register the Identity from an identities DB Entry.
+   *
+   * If the layer.Identity already exists, then its presumed that whatever is in
+   * javascript cache is more up to date than whats in IndexedDB cache.
+   *
+   * @method _createIdentity
+   * @param {Object} identity
+   * @returns {layer.Identity}
+   */
+  _createIdentity(identity) {
+    if (!this.client.getIdentity(identity.id)) {
+      identity._fromDB = true;
+      const newidentity = this.client._createObject(identity);
+      newidentity.syncState = identity.sync_state;
+      return newidentity;
     }
   }
 
@@ -559,13 +714,19 @@ class DbManager extends Root {
       .filter(item => item.operation !== 'DELETE' && item.target && item.target.match(/conversations/))
       .map(item => item.target);
 
+    const identityIds = syncEvents
+      .filter(item => item.operation !== 'DELETE' && item.target && item.target.match(/identities/))
+      .map(item => item.target);
+
     // Load any Messages/Conversations that are targets of operations.
     // Call _createMessage or _createConversation on all targets found.
     this.getObjects('messages', messageIds, (messages) => {
       messages.forEach(message => this._createMessage(message));
       this.getObjects('conversations', conversationIds, (conversations) => {
         conversations.forEach(conversation => this._createConversation(conversation));
-        this._loadSyncEventResults(syncEvents, callback);
+        this.getObjects('identities', identityIds, () => {
+          this._loadSyncEventResults(syncEvents, callback);
+        });
       });
     });
   }
@@ -579,7 +740,6 @@ class DbManager extends Root {
    * @param {layer.SyncEvent[]} callback.result
    */
   _loadSyncEventResults(syncEvents, callback) {
-
     // If the target is present in the sync event, but does not exist in the system,
     // do NOT attempt to instantiate this event... unless its a DELETE operation.
     const newData = syncEvents
@@ -615,6 +775,7 @@ class DbManager extends Root {
     });
 
     // Sort the results and then return them.
+    // TODO: Query results should come back sorted by database with proper Index
     Util.sortBy(newData, item => item.createdAt);
     callback(newData);
   }
@@ -647,28 +808,40 @@ class DbManager extends Root {
   /**
    * Load all data from the specified table and with the specified index value.
    *
+   * Results are always sorted in DESC order at this time.
+   *
    * @method _loadByIndex
    * @protected
-   * @param {String} tableName
-   * @param {String} indexName
-   * @param {String} indexValue
+   * @param {String} tableName - 'messages', 'conversations', 'identities'
+   * @param {String} indexName - Name of the index to query on
+   * @param {IDBKeyRange} [range=null] - Range to Query for
+   * @param {Boolean} [isFromId=false] - If querying for results after a specified ID, then we want to skip the first result (which will be that ID)
+   * @param {number} [pageSize=] - If a value is provided, return at most that number of results; else return all results.
    * @param {Function} callback
    * @param {Object[]} callback.result
    */
-  _loadByIndex(tableName, indexName, indexValue, callback) {
+  _loadByIndex(tableName, indexName, range, isFromId, pageSize, callback) {
     if (!this.tables[tableName]) return callback([]);
+    let shouldSkipNext = isFromId;
     this.onOpen(() => {
       const data = [];
-      const range = window.IDBKeyRange.only(indexValue);
       this.db.transaction([tableName], 'readonly')
           .objectStore(tableName)
           .index(indexName)
-          .openCursor(range)
+          .openCursor(range, 'prev')
           .onsuccess = (evt) => {
             const cursor = evt.target.result;
             if (cursor) {
-              data.push(cursor.value);
-              cursor.continue();
+              if (shouldSkipNext) {
+                shouldSkipNext = false;
+              } else {
+                data.push(cursor.value);
+              }
+              if (pageSize && data.length >= pageSize) {
+                callback(data);
+              } else {
+                cursor.continue();
+              }
             } else {
               if (!this.isDestroyed) callback(data);
             }

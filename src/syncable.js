@@ -21,8 +21,180 @@
 const Root = require('./root');
 const { SYNC_STATE } = require('./const');
 const LayerError = require('./layer-error');
+const ClientRegistry = require('./client-registry');
+const Constants = require('./const');
 
 class Syncable extends Root {
+  constructor(options = {}) {
+    super(options);
+    this.localCreatedAt = new Date();
+  }
+
+  /**
+   * Get the client associated with this Conversation.
+   *
+   * @method getClient
+   * @return {layer.Client}
+   */
+  getClient() {
+    return ClientRegistry.get(this.clientId);
+  }
+
+  static load(id, client) {
+    if (!client || !(client instanceof Root)) throw new Error(LayerError.dictionary.clientMissing);
+
+    const obj = {
+      id,
+      url: client.url + id.substring(8),
+      clientId: client.appId,
+    };
+
+    const ConstructorClass = Syncable.subclasses.filter(aClass => obj.id.indexOf(aClass.prefixUUID) === 0)[0];
+    const syncItem = new ConstructorClass(obj);
+    const typeName = ConstructorClass.eventPrefix;
+
+    if (typeName) {
+      client.dbManager.getObjects(typeName, [id], (items) => {
+        if (items.length) {
+          syncItem._populateFromServer(items[0]);
+          syncItem.trigger(typeName + ':loaded');
+        } else {
+          syncItem._load();
+        }
+      });
+    } else {
+      syncItem._load();
+    }
+
+    syncItem.syncState = SYNC_STATE.LOADING;
+    return syncItem;
+  }
+
+  /**
+   * Fire an XHR request using the URL for this resource.
+   *
+   * For more info on xhr method parameters see {@link layer.ClientAuthenticator#xhr}
+   *
+   * @method _xhr
+   * @protected
+   * @return {layer.Syncable} this
+   */
+  _xhr(options, callback) {
+    // initialize
+    if (!options.url) options.url = '';
+    if (!options.method) options.method = 'GET';
+    const client = this.getClient();
+
+    // Validatation
+    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
+    if (!client) throw new Error(LayerError.dictionary.clientMissing);
+    if (!this.constructor.enableOpsIfNew &&
+      options.method !== 'POST' && options.method !== 'GET' &&
+      this.syncState === Constants.SYNC_STATE.NEW) return this;
+
+    if (!options.url.match(/^http(s):\/\//)) {
+      if (options.url && !options.url.match(/^(\/|\?)/)) options.url = '/' + options.url;
+      if (!options.sync) options.url = this.url + options.url;
+    }
+
+    // Setup sync structure
+    options.sync = this._setupSyncObject(options.sync);
+
+    if (options.method !== 'GET') {
+      this._setSyncing();
+    }
+
+    client.xhr(options, (result) => {
+      if (result.success && options.method !== 'GET' && !this.isDestroyed) {
+        this._setSynced();
+      }
+      if (callback) callback(result);
+    });
+    return this;
+  }
+
+  _setupSyncObject(sync) {
+    if (sync !== false) {
+      if (!sync) sync = {};
+      if (!sync.target) sync.target = this.id;
+    }
+    return sync;
+  }
+
+  /**
+   * Load this resource from the server.
+   *
+   * Called from the static layer.Syncable.load() method
+   *
+   * @method _load
+   * @private
+   */
+  _load() {
+    this.syncState = SYNC_STATE.LOADING;
+    this._xhr({
+      method: 'GET',
+      sync: false,
+    }, result => this._loadResult(result));
+  }
+
+  /**
+   * Process the server's results from calling `load()`
+   *
+   * @method _loadResult
+   * @private
+   * @param {Object} result
+   */
+  _loadResult(result) {
+    const prefix = this.constructor.eventPrefix;
+    if (!result.success) {
+      this.syncState = SYNC_STATE.NEW;
+      this._triggerAsync(prefix + ':loaded-error', { error: result.data });
+      setTimeout(() => this.destroy(), 100); // Insure destroyed AFTER loaded-error event has triggered
+    } else {
+      this._populateFromServer(result.data);
+      this._loaded(result.data);
+      this.trigger(prefix + ':loaded');
+    }
+  }
+
+  /**
+   * Processing the result of a _load() call.
+   *
+   * Typically used to register the object and cleanup any properties not handled by _populateFromServer.
+   *
+   * @method _loaded
+   * @private
+   * @param  {Object} data - Response data from server
+   */
+  _loaded(data) {
+
+  }
+
+  /**
+   * A websocket event has been received specifying that this resource
+   * has been deleted.
+   *
+   * @method
+   * @protected
+   * @param {Object} data
+   */
+  _handleWebsocketDelete(data) {
+    this._deleted();
+    this.destroy();
+  }
+
+  /**
+   * The Object has been deleted.
+   *
+   * Destroy must be called separately, and handles most cleanup.
+   *
+   * @method _deleted
+   * @protected
+   */
+  _deleted() {
+    this.trigger(this.constructor.eventPrefix + ':delete');
+  }
+
 
   static load(id, client) {
     if (!client || !(client instanceof Root)) throw new Error(LayerError.dictionary.clientMissing);
@@ -131,6 +303,27 @@ class Syncable extends Root {
   }
 
   /**
+   * Returns a plain object.
+   *
+   * Object will have all the same public properties as this
+   * Syncable instance.  New object is returned any time
+   * any of this object's properties change.
+   *
+   * @method toObject
+   * @return {Object} POJO version of this object.
+   */
+  toObject() {
+    if (!this._toObject) {
+      this._toObject = super.toObject();
+      this._toObject.isNew = this.isNew();
+      this._toObject.isSaving = this.isSaving();
+      this._toObject.isSaved = this.isSaved();
+      this._toObject.isSynced = this.isSynced();
+    }
+    return this._toObject;
+  }
+
+  /**
    * Object is new, and is not yet queued for syncing
    *
    * @method isNew
@@ -173,6 +366,41 @@ class Syncable extends Root {
   }
 }
 
+/**
+ * Unique identifier.
+ *
+ * @type {string}
+ */
+Syncable.prototype.id = '';
+
+/**
+ * URL to access the object on the server.
+ *
+ * @type {string}
+ */
+Syncable.prototype.url = '';
+
+/**
+ * The time that this client created this instance.
+ * @type {Date}
+ */
+Syncable.prototype.localCreatedAt = null;
+
+
+/**
+ * layer.Client that the object belongs to.
+ *
+ * Actual value of this string matches the appId.
+ * @type {string}
+ */
+Syncable.prototype.clientId = '';
+
+/**
+ * Temporary property indicating that the instance was loaded from local database rather than server.
+ *
+ * @type {boolean}
+ */
+Syncable.prototype._fromDB = false;
 
 /**
  * The current sync state of this object.
@@ -208,6 +436,8 @@ Syncable.prototype._syncCounter = 0;
  * Prefix to use when triggering events
  */
 Syncable.eventPrefix = '';
+
+Syncable.enableOpsIfNew = false;
 
 /**
  * Is the object loading from the server?

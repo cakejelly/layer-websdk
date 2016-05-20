@@ -85,7 +85,7 @@ const LayerError = require('./layer-error');
 const Syncable = require('./syncable');
 const Message = require('./message');
 const Announcement = require('./announcement');
-const User = require('./user');
+const { Identity, UserIdentity, ServiceIdentity } = require('./identity');
 const TypingIndicatorListener = require('./typing-indicators/typing-indicator-listener');
 const Util = require('./client-utils');
 const Root = require('./root');
@@ -106,13 +106,9 @@ class Client extends ClientAuth {
     this._conversationsHash = {};
     this._messagesHash = {};
     this._queriesHash = {};
+    this._identitiesHash = {};
+    this._serviceIdentitiesHash = {};
     this._scheduleCheckAndPurgeCacheItems = [];
-
-    if (!options.users) {
-      this.users = [];
-    } else {
-      this.__updateUsers(this.users);
-    }
 
     this._initComponents();
 
@@ -131,6 +127,29 @@ class Client extends ClientAuth {
     Object.keys(Client.plugins).forEach(propertyName => {
       this[propertyName] = new Client.plugins[propertyName](this);
     });
+  }
+
+  /*
+   * @method _clientReady
+   * @private
+   * @fires ready
+   *
+   * WARNING: There is not at this time a recovery or reasonable way to bypass loading this user's
+   * Identity.  It will continue to retry until a value is found and THEN the client will complete authentication.
+   */
+  _clientReady() {
+    if (!this.user) {
+      const user = UserIdentity.load('layer:///identities/' + encodeURIComponent(this.userId), this);
+      user.sessionOwner = true;
+      user.on('identities:loaded', () => {
+        this.user = user;
+        this._clientReady();
+      });
+      user.on('identities:loaded-error', () => setTimeout(() => this._clientReady(), 2000));
+      this.user = user;
+    } else if (this.user.isSynced()) {
+      super._clientReady();
+    }
   }
 
   /**
@@ -163,10 +182,22 @@ class Client extends ClientAuth {
       this._queriesHash[id].destroy();
     });
     this._queriesHash = null;
-    if (this.users) [].concat(this.users).forEach(user => user.destroy ? user.destroy() : null);
 
-    // Ideally we'd set it to null, but _adjustUsers would make it []
-    this.users = [];
+    Object.keys(this._identitiesHash).forEach(id => {
+      const identity = this._identitiesHash[id];
+      if (identity && !identity.isDestroyed) {
+        identity.destroy();
+      }
+    });
+    this._identitiesHash = null;
+
+    Object.keys(this._serviceIdentitiesHash).forEach(id => {
+      const identity = this._serviidentityeIdentitiesHash[id];
+      if (identity && !identity.isDestroyed) {
+        identity.destroy();
+      }
+    });
+    this._serviceIdentitiesHash = null;
 
     if (this.socketManager) this.socketManager.close();
   }
@@ -224,6 +255,7 @@ class Client extends ClientAuth {
     } else if (canLoad) {
       return Conversation.load(id, this);
     }
+    return null;
   }
 
   /**
@@ -349,6 +381,7 @@ class Client extends ClientAuth {
     } else if (canLoad) {
       return Syncable.load(id, this);
     }
+    return null;
   }
 
   /**
@@ -439,6 +472,172 @@ class Client extends ClientAuth {
   }
 
   /**
+   * Retrieve a identity by Identifier.
+   *
+   *      var i1 = client.getIdentity('layer:///identities/user_id');
+   *      var i2 = client.getIdentity('layer:///serviceidentities/service_name');
+   *
+   * If there is not an Identity with that id, it will return null.
+   *
+   * If you want it to load it from cache and then from server if not in cache, use the `canLoad` parameter.
+   * This is only supported for User Identities, not Service Identities.
+   *
+   * If loading from the server, the method will return
+   * a layer.UserIdentity instance that has no data; the identities:loaded/identities:loaded-error events
+   * will let you know when the identity has finished/failed loading from the server.
+   *
+   *      var user = client.getIdentity('layer:///identities/123', true)
+   *      .on('identities:loaded', function() {
+   *          // Render the user list with all of its details loaded
+   *          myrerender(user);
+   *      });
+   *      // Render a placeholder for user until the details of user have loaded
+   *      myrender(user);
+   *
+   * @method getIdentity
+   * @param  {string} id - Accepts full Layer ID (layer:///identities/frodo-the-dodo) or just the UserID (frodo-the-dodo).
+   *                       If its just a UserID, its presumed to be a UserIdentity not a ServiceIdentity.
+   * @param  {boolean} [canLoad=false] - Pass true to allow loading an identity from
+   *                                    the server if not found
+   * @return {layer.Identity}
+   */
+  getIdentity(id, canLoad) {
+    if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
+    if (id.indexOf(UserIdentity.prefixUUID) !== 0 && id.indexOf(ServiceIdentity.prefixUUID) !== 0) {
+      id = UserIdentity.prefixUUID + encodeURIComponent(id);
+    }
+
+    switch (Util.typeFromID(id)) {
+      case 'identities':
+        if (this._identitiesHash[id]) {
+          return this._identitiesHash[id];
+        } else if (canLoad) {
+          return Identity.load(id, this);
+        }
+        break;
+      case 'serviceidentities':
+        if (this._serviceIdentitiesHash[id]) {
+          return this._serviceIdentitiesHash[id];
+        }
+    }
+    return null;
+  }
+
+  /**
+   * Adds an identity to the client.
+   *
+   * Typically, you do not need to call this; the Identity constructor will call this.
+   *
+   * @method _addIdentity
+   * @protected
+   * @param  {layer.Identity} identity
+   * @returns {layer.Client} this
+   *
+   * TODO: It should be possible to add an Identity whose userId is populated, but
+   * other values are not yet loaded from the server.  Should add to _identitiesHash now
+   * but trigger `identities:add` only when its got enough data to be renderable.
+   */
+  _addIdentity(identity) {
+    const id = identity.id;
+    switch (Util.typeFromID(id)) {
+      case 'identities':
+        if (!this._identitiesHash[id]) {
+          // Register the Identity
+          this._identitiesHash[id] = identity;
+          this._triggerAsync('identities:add', { identities: [identity] });
+        }
+        break;
+      case 'serviceidentities':
+        if (!this._serviceIdentitiesHash[id]) {
+          // Register the Identity
+          this._serviceIdentitiesHash[id] = identity;
+        }
+        break;
+    }
+    return this;
+  }
+
+  /**
+   * Removes an identity from the client.
+   *
+   * Typically, you do not need to call this; the following code
+   * automatically calls _removeIdentity for you:
+   *
+   *      identity.destroy();
+   *
+   * @method _removeIdentity
+   * @protected
+   * @param  {layer.Identity} identity
+   * @returns {layer.Client} this
+   */
+  _removeIdentity(identity) {
+    // Insure we do not get any events, such as message:remove
+    identity.off(null, null, this);
+
+    const id = identity.id;
+    switch (Util.typeFromID(id)) {
+      case 'identities':
+        if (this._identitiesHash[id]) {
+          delete this._identitiesHash[id];
+          this._triggerAsync('identities:remove', { identities: [identity] });
+        }
+        break;
+      case 'serviceidentities':
+        if (this._serviceIdentitiesHash[id]) {
+          delete this._serviceIdentitiesHash[id];
+        }
+        break;
+    }
+    return this;
+  }
+
+  /**
+   * Follow this user and get Full Identity, and websocket changes on Identity.
+   *
+   * @method followIdentity
+   * @param  {string} id - Accepts full Layer ID (layer:///identities/frodo-the-dodo) or just the UserID (frodo-the-dodo).
+   * @returns {layer.UserIdentity}
+   */
+  followIdentity(id) {
+    if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
+      id = UserIdentity.prefixUUID + encodeURIComponent(id);
+    }
+    let identity = this.getIdentity(id);
+    if (!identity) {
+      identity = new UserIdentity({
+        id,
+        clientId: this.appId,
+        userId: id.substring(20),
+      });
+    }
+    identity.follow();
+    return identity;
+  }
+
+  /**
+   * Unfollow this user and get only Basic Identity, and no websocket changes on Identity.
+   *
+   * @method unfollowIdentity
+   * @param  {string} id - Accepts full Layer ID (layer:///identities/frodo-the-dodo) or just the UserID (frodo-the-dodo).
+   * @returns {layer.UserIdentity}
+   */
+  unfollowIdentity(id) {
+    if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
+      id = UserIdentity.prefixUUID + encodeURIComponent(id);
+    }
+    let identity = this.getIdentity(id);
+    if (!identity) {
+      identity = new UserIdentity({
+        id,
+        clientId: this.appId,
+        userId: id.substring(20),
+      });
+    }
+    identity.unfollow();
+    return identity;
+  }
+
+  /**
    * Takes as input an object id, and either calls getConversation() or getMessage() as needed.
    *
    * Will only get cached objects, will not get objects from the server.
@@ -461,7 +660,11 @@ class Client extends ClientAuth {
         return this.getConversation(id);
       case 'queries':
         return this.getQuery(id);
+      case 'identities':
+      case 'serviceidentities':
+        return this.getIdentity(id);
     }
+    return null;
   }
 
 
@@ -486,6 +689,10 @@ class Client extends ClientAuth {
           return Announcement._createFromServer(obj, this);
         case 'conversations':
           return Conversation._createFromServer(obj, this);
+        case 'identities':
+          return UserIdentity._createFromServer(obj, this);
+        case 'serviceidentities':
+          return ServiceIdentity._createFromServer(obj, this);
       }
     }
   }
@@ -514,6 +721,12 @@ class Client extends ClientAuth {
     this._foldEvents(addMessages, 'messages', this);
     this._foldEvents(removeMessages, 'messages', this);
 
+    const addIdentities = this._delayedTriggers.filter((evt) => evt[0] === 'identities:add');
+    const removeIdentities = this._delayedTriggers.filter((evt) => evt[0] === 'identities:remove');
+
+    this._foldEvents(addIdentities, 'identities', this);
+    this._foldEvents(removeIdentities, 'identities', this);
+
     super._processDelayedTriggers();
   }
 
@@ -532,9 +745,9 @@ class Client extends ClientAuth {
    */
   _triggerLogger(eventName, evt) {
     const infoEvents = [
-      'conversations:add', 'conversations:remove',
-      'conversations:change', 'messages:add',
-      'messages:remove', 'messages:change',
+      'conversations:add', 'conversations:remove', 'conversations:change',
+      'messages:add', 'messages:remove', 'messages:change',
+      'identities:add', 'identities:remove', 'identities:change',
       'challenge', 'ready',
     ];
     if (infoEvents.indexOf(eventName) !== -1) {
@@ -595,79 +808,15 @@ class Client extends ClientAuth {
    */
   _resetSession() {
     this._cleanup();
-    this.users = [];
     this._conversationsHash = {};
     this._messagesHash = {};
     this._queriesHash = {};
+    this._identitiesHash = {};
+    this._serviceIdentitiesHash = {};
     return super._resetSession();
   }
 
-  /**
-   * Add a user to the users array.
-   *
-   * By doing this instead of just directly `this.client.users.push(user)`
-   * the user will get its conversations property setup correctly.
-   *
-   * @method addUser
-   * @param  {layer.User} user [description]
-   * @returns {layer.Client} this
-   */
-  addUser(user) {
-    this.users.push(user);
-    user.setClient(this);
-    this.trigger('users:change');
-    return this;
-  }
 
-  /**
-   * Searches `client.users` array for the specified id.
-   *
-   * Use of the `client.users` array is optional.
-   *
-   *      function getSenderDisplayName(message) {
-   *          var user = client.findUser(message.sender.userId);
-   *          return user ? user.displayName : 'Unknown User';
-   *      }
-   *
-   * @method findUser
-   * @param  {string} id
-   * @return {layer.User}
-   */
-  findUser(id) {
-    const l = this.users.length;
-    for (let i = 0; i < l; i++) {
-      const u = this.users[i];
-      if (u.id === id) return u;
-    }
-  }
-
-  /**
-   * __ Methods are automatically called by property setters.
-   *
-   * Insure that any attempt to set the `users` property sets it to an array.
-   *
-   * @method __adjustUsers
-   * @private
-   */
-  __adjustUsers(users) {
-    if (!users) return [];
-    if (!Array.isArray(users)) return [users];
-  }
-
-  /**
-   * __ Methods are automatically called by property setters.
-   *
-   * Insure that each user in the users array gets its client property setup.
-   *
-   * @method __adjustUsers
-   * @private
-   */
-  __updateUsers(users) {
-    users.forEach(u => {
-      if (u instanceof User) u.setClient(this);
-    });
-    this.trigger('users:change');
-  }
 
   /**
    * This method is recommended way to create a Conversation.
@@ -754,6 +903,7 @@ class Client extends ClientAuth {
     if (this._queriesHash[id]) {
       return this._queriesHash[id];
     }
+    return null;
   }
 
   /**
@@ -1077,19 +1227,13 @@ Client.prototype._scheduleCheckAndPurgeCacheItems = null;
  */
 Client.prototype._scheduleCheckAndPurgeCacheAt = 0;
 
+
 /**
- * Array of layer.User objects.
+ * The layer.UserIdentity for the authenticated user for this Client's session.
  *
- * Use of this property is optional; but by storing
- * an array of layer.User objects in this array, you can
- * then use the `client.findUser(userId)` method to lookup
- * users; and you can use the layer.User objects to find
- * suitable Conversations so you can associate a Direct
- * Message conversation with each user.
- *
- * @type {layer.User[]}
+ * @type {layer.UserIdentity}
  */
-Client.prototype.users = null;
+Client.prototype.user = null;
 
 
 /**
@@ -1370,7 +1514,6 @@ Client._supportedEvents = [
    */
   'messages:loaded',
 
-
   /**
    * A Conversation has been deleted from the server.
    *
@@ -1404,12 +1547,83 @@ Client._supportedEvents = [
   'messages:delete',
 
   /**
-   * A User has been added or changed in the users array.
+   * A call to layer.Identity.load has completed successfully
    *
-   * This event is not yet well supported.
    * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.Message} evt.target
    */
-  'users:change',
+  'identities:loaded',
+
+  /**
+   * An Identity has had a change in its properties.
+   *
+   * Changes occur when new data arrives from the server.
+   *
+   *      client.on('identities:change', function(evt) {
+   *          var displayNameChanges = evt.getChangesFor('displayName');
+   *          if (displayNameChanges.length) {
+   *              myView.renderStatus(evt.target);
+   *          }
+   *      });
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.Message} evt.target
+   * @param {Object[]} evt.changes
+   * @param {Mixed} evt.changes.newValue
+   * @param {Mixed} evt.changes.oldValue
+   * @param {string} evt.changes.property - Name of the property that has changed
+   */
+  'identities:change',
+
+  /**
+   * Identities have been added to the Client.
+   *
+   * This event is triggered whenever a new layer.UserIdentity (Full identity or not)
+   * has been received by the Client. layer.ServiceIdentity does not trigger this event.
+   *
+          client.on('identities:add', function(evt) {
+              evt.identities.forEach(function(identity) {
+                  myView.addIdentity(identity);
+              });
+          });
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.UserIdentity[]} evt.identities
+   */
+  'identities:add',
+
+  /**
+   * Identities have been removed from the Client.
+   *
+   * This does not typically occur.
+   *
+          client.on('identities:remove', function(evt) {
+              evt.identities.forEach(function(identity) {
+                  myView.addIdentity(identity);
+              });
+          });
+   *
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.UserIdentity[]} evt.identities
+   */
+  'identities:remove',
+
+  /**
+   * An Identity has been unfollowed or deleted.
+   *
+   * We do not delete such Identities entirely from the Client as
+   * there are still Messages from these Identities to be rendered,
+   * but we do downgrade them from Full Identity to Basic Identity.
+   * @event
+   * @param {layer.LayerEvent} evt
+   * @param {layer.UserIdentity} evt.target
+   */
+  'identities:unfollow',
+
 
   /**
    * A Typing Indicator state has changed.

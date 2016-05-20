@@ -126,7 +126,17 @@ responses = {
       "recipient_status": {
           "777": "sent"
       }
-
+    },
+    useridentity: {
+        id: "layer:///identities/frodo-the-dodo",
+        user_id: "frodo-the-dodo",
+        display_name: "Frodo The Dodo",
+        firstName: "Frodo",
+        lastName: "Dodo",
+        metadata: {}
+    },
+    serviceidentity: {
+        name: "I am Zod"
     }
 };
 

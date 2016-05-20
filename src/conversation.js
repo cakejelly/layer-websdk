@@ -64,7 +64,6 @@ const Util = require('./client-utils');
 const Constants = require('./const');
 const Root = require('./root');
 const LayerEvent = require('./layer-event');
-const ClientRegistry = require('./client-registry');
 const logger = require('./logger');
 
 class Conversation extends Syncable {
@@ -115,8 +114,6 @@ class Conversation extends Syncable {
       this.participants.push(client.userId);
     }
 
-    this.localCreatedAt = new Date();
-
     if (client) client._addConversation(this);
     this.isInitializing = false;
   }
@@ -137,16 +134,6 @@ class Conversation extends Syncable {
 
     this.participants = null;
     this.metadata = null;
-  }
-
-  /**
-   * Get the client associated with this Conversation.
-   *
-   * @method getClient
-   * @return {layer.Client}
-   */
-  getClient() {
-    return ClientRegistry.get(this.clientId);
   }
 
   /**
@@ -618,18 +605,12 @@ class Conversation extends Syncable {
     this.destroy();
   }
 
-  /**
-   * The Conversation has been deleted.
-   *
-   * Called from WebsocketManager and from layer.Conversation.delete();
-   *
-   * Destroy must be called separately, and handles most cleanup.
-   *
-   * @method _deleted
-   * @protected
-   */
-  _deleted() {
-    this.trigger('conversations:delete');
+  _handleWebsocketDelete(data) {
+    if (data.mode === 'my_devices' && data.from_position) {
+      this.getClient()._purgeMessagesByPosition(this.id, data.from_position);
+    } else {
+      super._handleWebsocketDelete();
+    }
   }
 
   /**
@@ -867,49 +848,6 @@ class Conversation extends Syncable {
     return this;
   }
 
-
-  /**
-   * Any xhr method called on this conversation uses the conversation's url.
-   *
-   * For details on parameters see {@link layer.ClientAuthenticator#xhr}
-   *
-   * @method _xhr
-   * @protected
-   * @return {layer.Conversation} this
-   */
-  _xhr(args, callback) {
-    const client = this.getClient();
-
-    // Validation
-    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
-    if (!client) throw new Error(LayerError.dictionary.clientMissing);
-    if (!('url' in args)) throw new Error(LayerError.dictionary.urlRequired);
-    if (args.method !== 'POST' && this.syncState === Constants.SYNC_STATE.NEW) return this;
-
-    if (args.sync !== false) {
-      if (!args.sync) args.sync = {};
-      if (!args.sync.target) {
-        args.sync.target = this.id;
-      }
-    }
-
-    if (args.url && !args.url.match(/^(\/|\?)/)) args.url = '/' + args.url;
-    if (!args.sync) args.url = this.url + args.url;
-
-    if (args.method && args.method !== 'GET') {
-      this._setSyncing();
-    }
-
-    client.xhr(args, (result) => {
-      if (args.method && args.method !== 'GET' && !this.isDestroyed) {
-        this._setSynced();
-      }
-      if (callback) callback(result);
-    });
-
-    return this;
-  }
-
   _getUrl(url) {
     return this.url + (url || '');
   }
@@ -1087,10 +1025,6 @@ class Conversation extends Syncable {
     if (!this._toObject) {
       this._toObject = super.toObject();
       this._toObject.metadata = Util.clone(this.metadata);
-      this._toObject.isNew = this.isNew();
-      this._toObject.isSaving = this.isSaving();
-      this._toObject.isSaved = this.isSaved();
-      this._toObject.isSynced = this.isSynced();
     }
     return this._toObject;
   }
@@ -1235,33 +1169,11 @@ class Conversation extends Syncable {
 Conversation.prototype.participants = null;
 
 /**
- * layer.Client that the conversation belongs to.
- *
- * Actual value of this string matches the appId.
- * @type {string}
- */
-Conversation.prototype.clientId = '';
-
-/**
  * Time that the conversation was created on the server.
  *
  * @type {Date}
  */
 Conversation.prototype.createdAt = null;
-
-/**
- * Conversation unique identifier.
- *
- * @type {string}
- */
-Conversation.prototype.id = '';
-
-/**
- * URL to access the conversation on the server.
- *
- * @type {string}
- */
-Conversation.prototype.url = '';
 
 /**
  * Number of unread messages in the conversation.
@@ -1290,12 +1202,6 @@ Conversation.prototype.distinct = true;
  */
 Conversation.prototype.metadata = null;
 
-/**
- * Time that the conversation object was instantiated
- * in the current client.
- * @type {Date}
- */
-Conversation.prototype.localCreatedAt = null;
 
 /**
  * The authenticated user is a current participant in this Conversation.
@@ -1342,9 +1248,6 @@ Conversation.eventPrefix = 'conversations';
  * @private
  */
 Conversation.prototype._sendDistinctEvent = null;
-
-
-Conversation.prototype._fromDB = false;
 
 /**
  * Prefix to use when generating an ID for instances of this class

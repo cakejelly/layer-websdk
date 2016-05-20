@@ -158,12 +158,11 @@ class Message extends Syncable {
     if (options && options.fromServer) {
       this._populateFromServer(options.fromServer);
     } else {
-      this.sender = { userId: '', name: '' };
+      if (client) this.sender = client.user;
       this.sentAt = new Date();
     }
 
     if (!this.parts) this.parts = [];
-    this.localCreatedAt = new Date();
 
     this._disableEvents = true;
     if (!options.fromServer) this.recipientStatus = {};
@@ -313,8 +312,8 @@ class Message extends Syncable {
 
     if (!conversation || Util.doesObjectMatch(status, oldStatus)) return;
 
-    const userId = client.userId;
-    const isSender = this.sender.userId === userId;
+    const userId = client.user.userId;
+    const isSender = this.sender.sessionOwner;
     const userHasRead = status[userId] === Constants.RECEIPT_STATE.READ;
 
     try {
@@ -422,7 +421,9 @@ class Message extends Syncable {
    */
   __updateIsRead(value) {
     if (value) {
-      this._sendReceipt(Constants.RECEIPT_STATE.READ);
+      if (!this._inPopulateFromServer) {
+        this._sendReceipt(Constants.RECEIPT_STATE.READ);
+      }
       this._triggerMessageRead();
       const conversation = this.getConversation(false);
       if (conversation) conversation.unreadCount--;
@@ -544,7 +545,6 @@ class Message extends Syncable {
       throw new Error(LayerError.dictionary.partsMissing);
     }
 
-    this.sender.userId = client.userId;
     this._setSyncing();
     client._addMessage(this);
 
@@ -725,20 +725,6 @@ class Message extends Syncable {
   }
 
   /**
-   * The Message has been deleted.
-   *
-   * Called from layer.Websockets.ChangeManager and from layer.Message.delete();
-   *
-   * Destroy must be called separately, and handles most cleanup.
-   *
-   * @method _deleted
-   * @protected
-   */
-  _deleted() {
-    this.trigger('messages:delete');
-  }
-
-  /**
    * Remove this Message from the system.
    *
    * This will deregister the Message, remove all events
@@ -765,6 +751,11 @@ class Message extends Syncable {
    * @param  {Object} m - Server description of the message
    */
   _populateFromServer(message) {
+    this._inPopulateFromServer = true;
+    const client = this.getClient();
+    let senderId,
+      sender;
+
     this.id = message.id;
     this.url = message.url;
     const oldPosition = this.position;
@@ -795,10 +786,18 @@ class Message extends Syncable {
     this.sentAt = new Date(message.sent_at);
     this.receivedAt = message.received_at ? new Date(message.received_at) : undefined;
 
-    this.sender = {
-      userId: message.sender.user_id || '',
-      name: message.sender.name || '',
-    };
+    if (message.sender.user_id) {
+      senderId = 'layer:///identities/' + message.sender.user_id;
+    } else {
+      senderId = 'layer:///serviceidentities/' + message.sender.name;
+    }
+    sender = client.getIdentity(senderId);
+
+    if (!sender) {
+      message.sender.id = senderId;
+      sender = client._createObject(message.sender);
+    }
+    this.sender = sender;
 
     this._setSynced();
 
@@ -809,6 +808,7 @@ class Message extends Syncable {
         property: 'position',
       });
     }
+    this._inPopulateFromServer = false;
   }
 
   /**
@@ -837,43 +837,13 @@ class Message extends Syncable {
     this._inLayerParser = true;
   }
 
-
-  /**
-   * Any xhr method called on this message uses the message's url.
-   *
-   * For more info on xhr method parameters see {@link layer.ClientAuthenticator#xhr}
-   *
-   * @method _xhr
-   * @protected
-   * @return {layer.Message} this
-   */
-  _xhr(options, callback) {
-    // initialize
-    let inUrl = options.url;
-    const client = this.getClient();
-
-    // Validatation
-    if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
-    if (!('url' in options)) throw new Error(LayerError.dictionary.urlRequired);
-
-    if (inUrl && !inUrl.match(/^(\/|\?)/)) options.url = inUrl = '/' + options.url;
-    if (!options.sync) options.url = this.url + options.url;
-
-    // Setup sync structure
-    options.sync = this._setupSyncObject(options.sync);
-
-    client.xhr(options, callback);
-    return this;
-  }
-
   _getUrl(url) {
     return this.url + (url || '');
   }
 
   _setupSyncObject(sync) {
     if (sync !== false) {
-      if (!sync) sync = {};
-      if (!sync.target) sync.target = this.id;
+      sync = super._setupSyncObject(sync);
       if (!sync.depends) {
         sync.depends = [this.conversationId];
       } else if (sync.depends.indexOf(this.id) === -1) {
@@ -916,10 +886,6 @@ class Message extends Syncable {
     if (!this._toObject) {
       this._toObject = super.toObject();
       this._toObject.recipientStatus = Util.clone(this.recipientStatus);
-      this._toObject.isNew = this.isNew();
-      this._toObject.isSaving = this.isSaving();
-      this._toObject.isSaved = this.isSaved();
-      this._toObject.isSynced = this.isSynced();
     }
     return this._toObject;
   }
@@ -955,7 +921,7 @@ class Message extends Syncable {
       fromServer: message,
       clientId: client.appId,
       _fromDB: message._fromDB,
-      _notify: fromWebsocket && message.is_unread && message.sender.user_id !== client.userId,
+      _notify: fromWebsocket && message.is_unread && message.sender.user_id !== client.user.userId,
     });
   }
 
@@ -1010,21 +976,6 @@ Message.prototype.conversationId = '';
 Message.prototype.parts = null;
 
 /**
- * Message Identifier.
- *
- * This value is shared by all participants and devices.
- *
- * @type {String}
- */
-Message.prototype.id = '';
-
-/**
- * URL to the server endpoint for operating on the message.
- * @type {String}
- */
-Message.prototype.url = '';
-
-/**
  * Time that the message was sent.
  * @type {Date}
  */
@@ -1038,19 +989,18 @@ Message.prototype.sentAt = null;
 Message.prototype.receivedAt = null;
 
 /**
- * Object representing the sender of the Message.
+ * Identity object representing the sender of the Message.
  *
- * Contains `userId` property which is
- * populated when the message was sent by a participant (or former participant)
- * in the Conversation.  Contains a `name` property which is
- * used when the Message is sent via a Named Platform API sender
- * such as "Admin", "Moderator", "Robot Jerking you Around".
+ * Most commonly used properties of Identity are:
+ * * displayName: A name for your UI
+ * * userId: Name for the user as represented on your system
+ * * name: Represents the name of a service if the sender was an automated system.
  *
  *      <span class='sent-by'>
- *        {message.sender.name || getDisplayNameForId(message.sender.userId)}
+ *        {message.sender.displayName || message.sender.name}
  *      </span>
  *
- * @type {Object}
+ * @type {layer.Identity}
  */
 Message.prototype.sender = null;
 
@@ -1147,15 +1097,11 @@ Message.prototype.readStatus = Constants.RECIPIENT_STATE.NONE;
  */
 Message.prototype.deliveryStatus = Constants.RECIPIENT_STATE.NONE;
 
-/**
- * The time that this client created this instance.
- * @type {Date}
- */
-Message.prototype.localCreatedAt = null;
-
 Message.prototype._toObject = null;
 
-Message.prototype._fromDB = false;
+Message.prototype._inPopulateFromServer = false;
+
+Message.eventPrefix = 'messages';
 
 Message.eventPrefix = 'messages';
 
