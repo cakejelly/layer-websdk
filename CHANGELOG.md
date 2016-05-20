@@ -34,6 +34,7 @@
     * Introduces the layer.UserIdentity and layer.ServiceIdentity clases.  A UserIdentity instance represents a user of the system that you can chat with.  A ServiceIdentity represents a Bot, or named service that posts messages and announcements.
     * Introduces the ability to create Queries to receive Identities
 * layer.User has been removed.
+* layer.Client now has a `user` property containing a `layer.UserIdentity` instance representing the authenticated user of this session.
 
 #### Bug Fixes
 
