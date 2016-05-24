@@ -192,7 +192,7 @@ class Client extends ClientAuth {
     this._identitiesHash = null;
 
     Object.keys(this._serviceIdentitiesHash).forEach(id => {
-      const identity = this._serviidentityeIdentitiesHash[id];
+      const identity = this._serviceIdentitiesHash[id];
       if (identity && !identity.isDestroyed) {
         identity.destroy();
       }

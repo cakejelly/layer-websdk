@@ -56,7 +56,7 @@
  * The property defaults to layer.Query.InstanceDataType.  Instances support methods and let you subscribe to events for direct notification
  * of changes to any of the results of your query:
  *
- * ```javascript
+* ```javascript
  * query.data[0].on('messages:change', function(evt) {
  *     alert('The first message has had a property change; probably isRead or recipient_status!');
  * });
@@ -181,7 +181,6 @@ const CONVERSATION = 'Conversation';
 const MESSAGE = 'Message';
 const ANNOUNCEMENT = 'Announcement';
 const IDENTITY = 'Identity';
-
 const findConvIdRegex = new RegExp(
   /^conversation.id\s*=\s*['"](layer:\/\/\/conversations\/.{8}-.{4}-.{4}-.{4}-.{12})['"]$/);
 
@@ -541,6 +540,8 @@ class Query extends Root {
    * @param  {number} pageSize - Number of new results to request
    */
   _runIdentity(pageSize) {
+    // There is not yet support for paging Identities;  If the query has previously fired,
+    // don't ask the database for any more data.
     this.client.dbManager.loadIdentities((identities) => {
       if (identities.length) this._appendResults({ data: identities });
     });

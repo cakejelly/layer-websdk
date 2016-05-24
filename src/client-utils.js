@@ -59,7 +59,7 @@ exports.isEmpty = (obj) => Object.prototype.toString.apply(obj) === '[object Obj
  */
 exports.sortBy = (inArray, fn, reverse) => {
   reverse = reverse ? -1 : 1;
-  inArray.sort((valueA, valueB) => {
+  return inArray.sort((valueA, valueB) => {
     const aa = fn(valueA);
     const bb = fn(valueB);
     if (aa === undefined && bb === undefined) return 0;

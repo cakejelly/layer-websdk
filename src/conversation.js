@@ -205,6 +205,8 @@ class Conversation extends Syncable {
       throw new Error(LayerError.dictionary.moreParticipantsRequired);
     }
 
+    this.createdAt = new Date();
+
     // Update the syncState
     this._setSyncing();
 

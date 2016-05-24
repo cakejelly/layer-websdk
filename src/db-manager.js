@@ -956,8 +956,9 @@ class DbManager extends Root {
   deleteTables(callback) {
     this.onOpen(() => {
       try {
-        const transaction = this.db.transaction(TABLES, 'readwrite');
-        TABLES.forEach(tableName => transaction.objectStore(tableName).clear());
+        const tableNames = TABLES.map(tableDef => tableDef.tableName);
+        const transaction = this.db.transaction(tableNames, 'readwrite');
+        tableNames.forEach(tableName => transaction.objectStore(tableName).clear());
         transaction.oncomplete = callback;
       } catch (e) {
         logger.error('Failed to delete table', e);

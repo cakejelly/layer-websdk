@@ -207,8 +207,22 @@ class Syncable extends Root {
 
     const ConstructorClass = Syncable.subclasses.filter(aClass => obj.id.indexOf(aClass.prefixUUID) === 0)[0];
     const syncItem = new ConstructorClass(obj);
+    const typeName = ConstructorClass.eventPrefix;
 
-    syncItem._load();
+    if (typeName) {
+      client.dbManager.getObjects(typeName, [id], (items) => {
+        if (items.length) {
+          syncItem._populateFromServer(items[0]);
+          syncItem.trigger(typeName + ':loaded');
+        } else {
+          syncItem._load();
+        }
+      });
+    } else {
+      syncItem._load();
+    }
+
+    syncItem.syncState = SYNC_STATE.LOADING;
     return syncItem;
   }
 
@@ -223,7 +237,6 @@ class Syncable extends Root {
   _load() {
     this.syncState = SYNC_STATE.LOADING;
     this._xhr({
-      url: '',
       method: 'GET',
       sync: false,
     }, result => this._loadResult(result));

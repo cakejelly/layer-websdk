@@ -14,7 +14,7 @@ describe("Conversation Integration Tests", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
-
+        client._clientAuthenticated();
         conversation = client._createObject(JSON.parse(JSON.stringify(responses.conversation1)));
         requests.reset();
         client.syncManager.queue = [];

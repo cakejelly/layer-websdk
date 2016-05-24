@@ -497,16 +497,8 @@ describe("The Query Class", function() {
         it("Should call dbManager.loadConversations if its a new query", function() {
           query._reset();
           spyOn(client.dbManager, "loadConversations");
-          query._runConversation();
-          expect(client.dbManager.loadConversations).toHaveBeenCalled();
-        });
-
-        it("Should skip call dbManager.loadConversations if its not a new query", function() {
-          query._reset();
-          query._runConversation();
-          spyOn(client.dbManager, "loadConversations");
-          query._runConversation();
-          expect(client.dbManager.loadConversations).not.toHaveBeenCalled();
+          query._runConversation(17);
+          expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', '', 17, jasmine.any(Function));
         });
 
         it("Should set isFiring to true", function() {
@@ -527,16 +519,20 @@ describe("The Query Class", function() {
         });
 
         it("Should call without from_id if last Conversation has temp id", function() {
+            spyOn(client.dbManager, "loadConversations");
             query.data.push(client.createConversation(["b"]));
             query._runConversation(33);
             expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=created_at&page_size=33");
+            expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', '', 33, jasmine.any(Function));
         });
 
         it("Should call with from_id", function() {
-            query.data.push(client.createConversation(["b"]));
+            spyOn(client.dbManager, "loadConversations");
+            query.data.push(client.createConversation(["b"]).send());
             query.data[0].syncState = layer.Constants.SYNC_STATE.SYNCED;
             query._runConversation(34);
             expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=created_at&page_size=34&from_id=" + query.data[0].id);
+            expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', query.data[0].id, 34, jasmine.any(Function));
         });
 
 
@@ -635,26 +631,22 @@ describe("The Query Class", function() {
           query._reset();
           spyOn(client.dbManager, "loadAnnouncements");
           query._runAnnouncement(140);
-          expect(client.dbManager.loadAnnouncements).toHaveBeenCalled();
-        });
-
-        it("Should skip call dbManager.loadAnnouncements if its not a new query", function() {
-          query._reset();
-          query._runAnnouncement(100);
-          spyOn(client.dbManager, "loadAnnouncements");
-          query._runAnnouncement(142);
-          expect(client.dbManager.loadAnnouncements).not.toHaveBeenCalled();
+          expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith('', 140, jasmine.any(Function));
         });
 
         it("Should call without from_id", function() {
+            spyOn(client.dbManager, "loadAnnouncements");
             query._runAnnouncement(41);
             expect(requests.mostRecent().url).toEqual(client.url  + "/announcements?page_size=41");
+            expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith('', 41, jasmine.any(Function));
         });
 
         it("Should call with from_id", function() {
+            spyOn(client.dbManager, "loadAnnouncements");
             query.data = [announcement];
             query._runAnnouncement(44);
             expect(requests.mostRecent().url).toEqual(client.url  + "/announcements?page_size=44&from_id=" + announcement.id);
+            expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith(announcement.id, 44, jasmine.any(Function));
         });
 
         it("Should refuse to call if already firing with same url", function() {
@@ -736,16 +728,7 @@ describe("The Query Class", function() {
           query._reset();
           spyOn(client.dbManager, "loadMessages");
           query._runMessage(140);
-          expect(client.dbManager.loadMessages).toHaveBeenCalled();
-        });
-
-        it("Should skip call dbManager.loadMessages if its not a new query", function() {
-          query._reset();
-          query._runMessage(100);
-
-          spyOn(client.dbManager, "loadMessages");
-          query._runMessage(100);
-          expect(client.dbManager.loadMessages).not.toHaveBeenCalled();
+          expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, '', 140, jasmine.any(Function));
         });
 
         it("Should call without from_id", function() {
@@ -760,6 +743,7 @@ describe("The Query Class", function() {
         });
 
         it("Should call without from_id if last Message in data is conversation.lastMessage", function() {
+            spyOn(client.dbManager, "loadMessages");
             var m = new layer.Message({
                 client: client,
                 fromServer: responses.message1,
@@ -770,9 +754,11 @@ describe("The Query Class", function() {
             query.data = [m];
             query._runMessage(43);
             expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=43");
+            expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, '', 43, jasmine.any(Function));
         });
 
         it("Should call with from_id", function() {
+            spyOn(client.dbManager, "loadMessages");
             var m1 = new layer.Message({
                 client: client,
                 fromServer: responses.message1,
@@ -787,6 +773,8 @@ describe("The Query Class", function() {
             query.data = [m1, m2];
             query._runMessage(44);
             expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=44&from_id=" + query.data[1].id);
+            expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, m2.id, 44, jasmine.any(Function));
+
         });
 
         it("Should refuse to call if already firing with same url", function() {
@@ -884,15 +872,7 @@ describe("The Query Class", function() {
           query._reset();
           spyOn(client.dbManager, "loadIdentities");
           query._runIdentity(140);
-          expect(client.dbManager.loadIdentities).toHaveBeenCalled();
-        });
-
-        it("Should skip call dbManager.loadIdentities if its not a new query", function() {
-          query._reset();
-          query._runIdentity(100);
-          spyOn(client.dbManager, "loadIdentities");
-          query._runIdentity(142);
-          expect(client.dbManager.loadIdentities).not.toHaveBeenCalled();
+          expect(client.dbManager.loadIdentities).toHaveBeenCalledWith(jasmine.any(Function));
         });
 
         it("Should call without from_id", function() {

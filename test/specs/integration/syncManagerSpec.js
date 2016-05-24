@@ -14,7 +14,7 @@ describe("SyncManager Integration Tests", function() {
         });
         client.sessionToken = "sessionToken";
         client.userId = "Frodo";
-        client._clientReady();
+        client._clientAuthenticated();
         conversation = client._createObject(responses.conversation1).conversation;
         requests.reset();
         client.syncManager.queue = [];

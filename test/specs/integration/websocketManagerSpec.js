@@ -84,7 +84,26 @@ describe("Websocket tests", function() {
         client = new layer.Client({
             appId: "Client1"
         });
+
         client.userId = "c";
+        var identity = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: client.userId,
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true
+        });
+        client.user = identity;
+
+        client._clientAuthenticated();
         socket = client.socketManager;
         socket._socket = {
             close: function() {},
@@ -832,10 +851,12 @@ describe("Websocket tests", function() {
                     },
                     sender: {user_id: "a"},
                     parts: [{body: "hello", mime_type: "text/plain"}],
-                    id: m1.id
+                    id: m1.id,
+                    sent_at: new Date().toISOString()
                 },
                 client: client
             });
+
 
             c.__lastMessage = m;
 
