@@ -472,7 +472,7 @@ class DbManager extends Root {
    */
   loadConversations(sortBy, fromId, pageSize, callback) {
     let sortIndex,
-      range;
+      range = null;
     const fromConversation = fromId ? this.client.getConversation(fromId) : null;
     if (sortBy === 'last_message') {
       sortIndex = 'last_message_sent';
