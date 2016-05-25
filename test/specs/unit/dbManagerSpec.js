@@ -11,6 +11,8 @@ describe("The DbManager Class", function() {
         basicIdentity,
         dbManager;
 
+        var MAX_SAFE_INTEGER = 9007199254740991;
+
     beforeEach(function(done) {
         client = new layer.Client({
             appId: appId,
@@ -835,7 +837,7 @@ describe("The DbManager Class", function() {
         var range = dbManager._loadByIndex.calls.allArgs()[0][2];
         expect(dbManager._loadByIndex).toHaveBeenCalledWith('messages', 'conversation', jasmine.any(IDBKeyRange), false, undefined, jasmine.any(Function));
         expect(range.lower).toEqual([conversation.id, 0]);
-        expect(range.upper).toEqual([conversation.id, Number.MAX_SAFE_INTEGER]);
+        expect(range.upper).toEqual([conversation.id, MAX_SAFE_INTEGER]);
       });
 
       it("Should call _loadByIndex with fromId and pageSize", function() {
@@ -867,7 +869,7 @@ describe("The DbManager Class", function() {
         var range = dbManager._loadByIndex.calls.allArgs()[0][2];
         expect(dbManager._loadByIndex).toHaveBeenCalledWith('messages', 'conversation', jasmine.any(IDBKeyRange), false, undefined, jasmine.any(Function));
         expect(range.lower).toEqual(['announcement', 0]);
-        expect(range.upper).toEqual(['announcement', Number.MAX_SAFE_INTEGER]);
+        expect(range.upper).toEqual(['announcement', MAX_SAFE_INTEGER]);
       });
 
       it("Should call _loadByIndex with fromId", function() {
@@ -1277,7 +1279,7 @@ describe("The DbManager Class", function() {
       });
 
       it("Should get only items matching the index", function(done) {
-        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, Number.MAX_SAFE_INTEGER]);
+        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, MAX_SAFE_INTEGER]);
         dbManager._loadByIndex('messages', 'conversation', query, false, null, function(result) {
           var sortedExpect =  layer.Util.sortBy(dbManager._getMessageData([m2, m1, message]), function(item) {return item.position}).reverse();
 
@@ -1287,7 +1289,7 @@ describe("The DbManager Class", function() {
       });
 
       it("Should apply pageSize", function(done) {
-        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, Number.MAX_SAFE_INTEGER]);
+        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, MAX_SAFE_INTEGER]);
         dbManager._loadByIndex('messages', 'conversation', query, false, 2, function(result) {
           var sortedExpect =  layer.Util.sortBy(dbManager._getMessageData([message, m2, m1]), function(item) {return item.position}).reverse();
 
@@ -1297,7 +1299,7 @@ describe("The DbManager Class", function() {
       });
 
       it("Should skip first result if isFromId", function() {
-        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, Number.MAX_SAFE_INTEGER]);
+        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, MAX_SAFE_INTEGER]);
         dbManager._loadByIndex('messages', 'conversation', query, true, null, function(result) {
           var sortedExpect =  layer.Util.sortBy(dbManager._getMessageData([message, m2, m1]), function(item) {return item.position}).reverse();
 
@@ -1309,7 +1311,7 @@ describe("The DbManager Class", function() {
 
       it("Should get nothing if disabled", function(done) {
         dbManager.tables.messages = false;
-        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, Number.MAX_SAFE_INTEGER]);
+        const query = window.IDBKeyRange.bound([conversation.id, 0], [conversation.id, MAX_SAFE_INTEGER]);
         dbManager._loadByIndex('messages', 'conversation', query, false, null, function(result) {
           expect(result).toEqual([]);
           done();

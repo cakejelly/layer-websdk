@@ -11,6 +11,7 @@
  */
 
 const DB_VERSION = 18;
+const MAX_SAFE_INTEGER = 9007199254740991;
 const Root = require('./root');
 const logger = require('./logger');
 const SyncEvent = require('./sync-event');
@@ -537,7 +538,7 @@ class DbManager extends Root {
    */
   loadMessages(conversationId, fromId, pageSize, callback) {
     const fromMessage = fromId ? this.client.getMessage(fromId) : null;
-    const query = window.IDBKeyRange.bound([conversationId, 0], [conversationId, fromMessage ? fromMessage.position : Number.MAX_SAFE_INTEGER]);
+    const query = window.IDBKeyRange.bound([conversationId, 0], [conversationId, fromMessage ? fromMessage.position : MAX_SAFE_INTEGER]);
     this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, (data) => {
       this._loadMessagesResult(data, callback);
     });
@@ -554,7 +555,7 @@ class DbManager extends Root {
    */
   loadAnnouncements(fromId, pageSize, callback) {
     const fromMessage = fromId ? this.client.getMessage(fromId) : null;
-    const query = window.IDBKeyRange.bound(['announcement', 0], ['announcement', fromMessage ? fromMessage.position : Number.MAX_SAFE_INTEGER]);
+    const query = window.IDBKeyRange.bound(['announcement', 0], ['announcement', fromMessage ? fromMessage.position : MAX_SAFE_INTEGER]);
     this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, (data) => {
       this._loadMessagesResult(data, callback);
     });
