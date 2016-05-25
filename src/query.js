@@ -306,6 +306,8 @@ class Query extends Root {
     this.client._checkAndPurgeCache(data);
     this.isFiring = false;
     this._predicate = null;
+    this._nextDBFromId = '';
+    this._nextServerFromId = '';
     this.paginationWindow = this._initialPaginationWindow;
     this._triggerChange({
       data: [],
@@ -371,23 +373,24 @@ class Query extends Root {
    * @param  {number} pageSize - Number of new results to request
    */
   _runConversation(pageSize) {
-    // This is a pagination rather than an initial request if there is already data; get the fromId
-    // which is the id of the last result.
-    const lastConversation = this.data[this.data.length - 1];
-    const lastConversationInstance = !lastConversation ? null : this._getInstance(lastConversation);
-    const fromId = (lastConversationInstance && lastConversationInstance.isSaved() ?
-      lastConversationInstance.id : '');
     const sortBy = this._getSortField();
-    this.isFiring = true;
-    const firingRequest = this._firingRequest = `conversations?sort_by=${sortBy}&page_size=${pageSize}${fromId ? '&from_id=' + fromId : ''}`;
-    this.client.dbManager.loadConversations(sortBy, fromId, pageSize, (conversations) => {
-      if (conversations.length) this._appendResults({ data: conversations });
+
+    this.client.dbManager.loadConversations(sortBy, this._nextDBFromId, pageSize, (conversations) => {
+      if (conversations.length) this._appendResults({ data: conversations }, true);
     });
-    this.client.xhr({
-      url: firingRequest,
-      method: 'GET',
-      sync: false,
-    }, results => this._processRunResults(results, firingRequest));
+
+    const newRequest = `conversations?sort_by=${sortBy}&page_size=${pageSize}` +
+      (this._nextServerFromId ? '&from_id=' + this._nextServerFromId : '');
+
+    if (newRequest !== this._firingRequest) {
+      this.isFiring = true;
+      this._firingRequest = newRequest;
+      this.client.xhr({
+        url: this._firingRequest,
+        method: 'GET',
+        sync: false,
+      }, results => this._processRunResults(results, this._firingRequest));
+    }
   }
 
   /**
@@ -439,11 +442,6 @@ class Query extends Root {
    * @param  {number} pageSize - Number of new results to request
    */
   _runMessage(pageSize) {
-    // This is a pagination rather than an initial request if there is already data; get the fromId
-    // which is the id of the last result.
-    const lastMessage = this.data[this.data.length - 1];
-    const lastMessageInstance = !lastMessage ? null : this._getInstance(lastMessage);
-    let fromId = (lastMessageInstance && lastMessageInstance.isSaved() ? lastMessageInstance.id : '');
     const predicateIds = this._getConversationPredicateIds();
 
     // Do nothing if we don't have a conversation to query on
@@ -452,25 +450,13 @@ class Query extends Root {
       if (!this._predicate) this._predicate = predicateIds.id;
       const conversation = this.client.getConversation(conversationId);
 
-      // If the only Message is the Conversation's lastMessage, then we probably got this
-      // result from `GET /conversations`, and not from `GET /messages`.  Get ALL Messages,
-      // not just messages after the `lastMessage` if we've never received any messages from
-      // `GET /messages` (safety code, not required code).  This also means that the first
-      // Query gets MAX_PAGE_SIZE results instead of MAX_PAGE_SIZE + 1 results.
-      if (conversation && conversation.lastMessage &&
-          lastMessage && lastMessage.id === conversation.lastMessage.id) {
-        fromId = '';
-      }
-
-      // If no data, retrieve data from db cache in parallel with loading data from server
-      this.client.dbManager.loadMessages(conversationId, fromId, pageSize, (messages) => {
-        if (messages.length) this._appendResults({ data: messages });
+      // Retrieve data from db cache in parallel with loading data from server
+      this.client.dbManager.loadMessages(conversationId, this._nextDBFromId, pageSize, (messages) => {
+        if (messages.length) this._appendResults({ data: messages }, true);
       });
 
-      // If the last message we have loaded is already the Conversation's lastMessage, then just request data without paging,
-      // common occurence when query is populated with only a single result: conversation.lastMessage.
-      // if (conversation && conversation.lastMessage && lastMessage && lastMessage.id === conversation.lastMessage.id) fromId = '';
-      const newRequest = `conversations/${predicateIds.uuid}/messages?page_size=${pageSize}${fromId ? '&from_id=' + fromId : ''}`;
+      const newRequest = `conversations/${predicateIds.uuid}/messages?page_size=${pageSize}` +
+        (this._nextServerFromId ? '&from_id=' + this._nextServerFromId : '');
 
       // Don't query on unsaved conversations, nor repeat still firing queries
       if ((!conversation || conversation.isSaved()) && newRequest !== this._firingRequest) {
@@ -509,16 +495,13 @@ class Query extends Root {
    * @param  {number} pageSize - Number of new results to request
    */
   _runAnnouncement(pageSize) {
-    // This is a pagination rather than an initial request if there is already data; get the fromId
-    // which is the id of the last result.
-    const lastMessage = this.data[this.data.length - 1];
-    const lastMessageInstance = !lastMessage ? null : this._getInstance(lastMessage);
-    const fromId = (lastMessageInstance && lastMessageInstance.isSaved() ? lastMessageInstance.id : '');
-    const newRequest = `announcements?page_size=${pageSize}${fromId ? '&from_id=' + fromId : ''}`;
-
-    this.client.dbManager.loadAnnouncements(fromId, pageSize, (messages) => {
-      if (messages.length) this._appendResults({ data: messages });
+    // Retrieve data from db cache in parallel with loading data from server
+    this.client.dbManager.loadAnnouncements(this._nextDBFromId, pageSize, (messages) => {
+      if (messages.length) this._appendResults({ data: messages }, true);
     });
+
+    const newRequest = `announcements?page_size=${pageSize}` +
+      (this._nextServerFromId ? '&from_id=' + this._nextServerFromId : '');
 
     // Don't repeat still firing queries
     if (newRequest !== this._firingRequest) {
@@ -540,21 +523,16 @@ class Query extends Root {
    * @param  {number} pageSize - Number of new results to request
    */
   _runIdentity(pageSize) {
-    // There is not yet support for paging Identities;  If the query has previously fired,
-    // don't ask the database for any more data.
-    this.client.dbManager.loadIdentities((identities) => {
-      if (identities.length) this._appendResults({ data: identities });
-    });
+    // There is not yet support for paging Identities;  as all identities are loaded,
+    // if there is a _nextDBFromId, we no longer need to get any more from the database
+    if (!this._nextDBFromId) {
+      this.client.dbManager.loadIdentities((identities) => {
+        if (identities.length) this._appendResults({ data: identities }, true);
+      });
+    }
 
-    // This is a pagination rather than an initial request if there is already data; get the fromId
-    // which is the id of the last result.
-    const lastIdentity = this.data[this.data.length - 1];
-    const fromId = (lastIdentity ? '&from_id=' + lastIdentity.id : '');
-
-    // If the last message we have loaded is already the Conversation's lastMessage, then just request data without paging,
-    // common occurence when query is populated with only a single result: conversation.lastMessage.
-    // if (conversation && conversation.lastMessage && lastMessage && lastMessage.id === conversation.lastMessage.id) fromId = '';
-    const newRequest = `identities?page_size=${pageSize}${fromId}`;
+    const newRequest = `identities?page_size=${pageSize}` +
+      (this._nextServerFromId ? '&from_id=' + this._nextServerFromId : '');
 
     // Don't repeat still firing queries
     if (newRequest !== this._firingRequest) {
@@ -582,7 +560,7 @@ class Query extends Root {
     this.isFiring = false;
     this._firingRequest = '';
     if (results.success) {
-      this._appendResults(results);
+      this._appendResults(results, false);
       this.totalSize = results.xhr.getResponseHeader('Layer-Count');
     } else {
       this.trigger('error', { error: results.data });
@@ -595,22 +573,31 @@ class Query extends Root {
    * @method  _appendResults
    * @private
    */
-  _appendResults(results) {
+  _appendResults(results, fromDb) {
     // For all results, register them with the client
     // If already registered with the client, properties will be updated as needed
+    // Database results rather than server results will arrive already registered.
     results.data.forEach(item => {
-      if (item instanceof Root) return item;
-      return this.client._createObject(item);
+      if (!(item instanceof Root)) this.client._createObject(item);
     });
 
     // Filter results to just the new results
     const newResults = results.data.filter(item => this._getIndex(item.id) === -1);
+
+    // Update the next ID to use in pagination
+    const resultLength = results.data.length;
+    if (resultLength) {
+      if (fromDb) this._nextDBFromId = results.data[resultLength - 1].id;
+      else this._nextServerFromId = results.data[resultLength - 1].id;
+    }
 
     // Update this.data
     if (this.dataType === Query.ObjectDataType) {
       this.data = [].concat(this.data);
     }
     const data = this.data;
+
+    // Insert the results... if the results are a match
     newResults.forEach(itemIn => {
       let index;
       const item = this.client._getObject(itemIn.id);
@@ -907,6 +894,8 @@ class Query extends Root {
     evt.conversations.forEach(conversation => {
       const index = this._getIndex(conversation.id);
       if (index !== -1) {
+        if (conversation.id === this._nextDBFromId) this._nextDBFromId = this._updateNextFromId(index);
+        if (conversation.id === this._nextServerFromId) this._nextServerFromId = this._updateNextFromId(index);
         removed.push({
           data: conversation,
           index,
@@ -1098,6 +1087,8 @@ class Query extends Root {
     evt.messages.forEach(message => {
       const index = this._getIndex(message.id);
       if (index !== -1) {
+        if (message.id === this._nextDBFromId) this._nextDBFromId = this._updateNextFromId(index);
+        if (message.id === this._nextServerFromId) this._nextServerFromId = this._updateNextFromId(index);
         removed.push({
           data: message,
           index,
@@ -1199,6 +1190,8 @@ class Query extends Root {
     evt.identities.forEach(identity => {
       const index = this._getIndex(identity.id);
       if (index !== -1) {
+        if (identity.id === this._nextDBFromId) this._nextDBFromId = this._updateNextFromId(index);
+        if (identity.id === this._nextServerFromId) this._nextServerFromId = this._updateNextFromId(index);
         removed.push({
           data: identity,
           index,
@@ -1223,6 +1216,24 @@ class Query extends Root {
         query: this,
       });
     });
+  }
+
+  /**
+   * If the current next-id is removed from the list, get a new nextId.
+   *
+   * If the index is greater than 0, whatever is after that index may have come from
+   * websockets or other sources, so decrement the index to get the next safe paging id.
+   *
+   * If the index if 0, even if there is data, that data did not come from paging and
+   * can not be used safely as a paging id; return '';
+   *
+   * @method _updateNextFromId
+   * @param {number} index - Current index of the nextFromId
+   * @returns {string} - Next ID or empty string
+   */
+  _updateNextFromId(index) {
+    if (index > 0) return this.data[index - 1].id;
+    else return '';
   }
 
   _triggerChange(evt) {
@@ -1461,6 +1472,33 @@ Query.prototype.isFiring = false;
  * @private
  */
 Query.prototype._firingRequest = '';
+
+/**
+ * The ID to use in paging the server.
+ *
+ * Why not just use the ID of the last item in our result set?
+ * Because as we receive websocket events, we insert and append items to our data.
+ * That websocket event may not in fact deliver the NEXT item in our data, but simply an item, that sequentially
+ * belongs at the end despite skipping over other items of data.  Paging should not be from this new item, but
+ * only the last item pulled via this query from the server.
+ *
+ * @type {string}
+ */
+Query.prototype._nextServerFromId = '';
+
+/**
+ * The ID to use in paging the database.
+ *
+ * Why not just use the ID of the last item in our result set?
+ * Because as we receive websocket events, we insert and append items to our data.
+ * That websocket event may not in fact deliver the NEXT item in our data, but simply an item, that sequentially
+ * belongs at the end despite skipping over other items of data.  Paging should not be from this new item, but
+ * only the last item pulled via this query from the database.
+ *
+ * @type {string}
+ */
+Query.prototype._nextDBFromId = '';
+
 
 Query._supportedEvents = [
   /**

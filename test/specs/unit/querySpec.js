@@ -303,6 +303,15 @@ describe("The Query Class", function() {
             expect(query.paginationWindow).toEqual(15);
         });
 
+
+        it("Should reset pagination properties", function() {
+           query._nextServerFromId = "hey";
+           query._nextDBFromId = "ho";
+           query._reset();
+           expect(query._nextServerFromId).toEqual('');
+           expect(query._nextDBFromId).toEqual('');
+        });
+
         it("Should reset _predicate", function() {
             query._predicate = "hey";
             query._reset();
@@ -494,22 +503,41 @@ describe("The Query Class", function() {
             query.destroy();
         });
 
-        it("Should call dbManager.loadConversations if its a new query", function() {
-          query._reset();
-          spyOn(client.dbManager, "loadConversations");
-          query._runConversation(17);
-          expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', '', 17, jasmine.any(Function));
-        });
-
         it("Should set isFiring to true", function() {
             query.isFiring = false;
             query._runConversation();
             expect(query.isFiring).toBe(true);
         });
 
-        it("Should call without from_id", function() {
+        it("Should call server with _nextServerFromId", function() {
+            // Test 1
             query._runConversation(32);
             expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=created_at&page_size=32");
+
+            // Test 2
+            query._nextServerFromId = 'howdy';
+            query._runConversation(32);
+            expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=created_at&page_size=32&from_id=howdy");
+        });
+
+        it("Should call DB with _nextDBFromId", function() {
+          spyOn(client.dbManager, "loadConversations");
+
+          // Test 1
+          query._runConversation(17);
+          expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', '', 17, jasmine.any(Function));
+
+          // Test 2
+          query._nextDBFromId = 'howdy';
+          query._runConversation(17);
+          expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', 'howdy', 17, jasmine.any(Function));
+        });
+
+        it("Should refuse to call if already firing with same url", function() {
+            requests.reset();
+            query._runConversation(45);
+            query._runConversation(45);
+            expect(requests.count()).toEqual(1);
         });
 
         it("Should call with last_message sorting", function() {
@@ -517,24 +545,6 @@ describe("The Query Class", function() {
             query._runConversation(32);
             expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=last_message&page_size=32");
         });
-
-        it("Should call without from_id if last Conversation has temp id", function() {
-            spyOn(client.dbManager, "loadConversations");
-            query.data.push(client.createConversation(["b"]));
-            query._runConversation(33);
-            expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=created_at&page_size=33");
-            expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', '', 33, jasmine.any(Function));
-        });
-
-        it("Should call with from_id", function() {
-            spyOn(client.dbManager, "loadConversations");
-            query.data.push(client.createConversation(["b"]).send());
-            query.data[0].syncState = layer.Constants.SYNC_STATE.SYNCED;
-            query._runConversation(34);
-            expect(requests.mostRecent().url).toEqual(client.url + "/conversations?sort_by=created_at&page_size=34&from_id=" + query.data[0].id);
-            expect(client.dbManager.loadConversations).toHaveBeenCalledWith('created_at', query.data[0].id, 34, jasmine.any(Function));
-        });
-
 
         it("Should call _processRunResults", function() {
             spyOn(query, "_processRunResults");
@@ -627,26 +637,28 @@ describe("The Query Class", function() {
             expect(query.isFiring).toBe(true);
         });
 
-        it("Should call dbManager.loadAnnouncements if its a new query", function() {
-          query._reset();
+        it("Should call server with _nextServerFromId", function() {
+            // Test 1
+            query._runAnnouncement(140);
+            expect(requests.mostRecent().url).toEqual(client.url + "/announcements?page_size=140");
+
+            // Test 2
+            query._nextServerFromId = "howdy";
+            query._runAnnouncement(140);
+            expect(requests.mostRecent().url).toEqual(client.url + "/announcements?page_size=140&from_id=howdy");
+        });
+
+        it("Should call DB with _nextDBFromId", function() {
           spyOn(client.dbManager, "loadAnnouncements");
-          query._runAnnouncement(140);
-          expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith('', 140, jasmine.any(Function));
-        });
 
-        it("Should call without from_id", function() {
-            spyOn(client.dbManager, "loadAnnouncements");
-            query._runAnnouncement(41);
-            expect(requests.mostRecent().url).toEqual(client.url  + "/announcements?page_size=41");
-            expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith('', 41, jasmine.any(Function));
-        });
+          // Test 1
+          query._runAnnouncement(141);
+          expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith('', 141, jasmine.any(Function));
 
-        it("Should call with from_id", function() {
-            spyOn(client.dbManager, "loadAnnouncements");
-            query.data = [announcement];
-            query._runAnnouncement(44);
-            expect(requests.mostRecent().url).toEqual(client.url  + "/announcements?page_size=44&from_id=" + announcement.id);
-            expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith(announcement.id, 44, jasmine.any(Function));
+          // Test 2
+          query._nextDBFromId = 'howdy';
+          query._runAnnouncement(141);
+          expect(client.dbManager.loadAnnouncements).toHaveBeenCalledWith('howdy', 141, jasmine.any(Function));
         });
 
         it("Should refuse to call if already firing with same url", function() {
@@ -724,58 +736,30 @@ describe("The Query Class", function() {
         });
 
 
-        it("Should call dbManager.loadMessages if its a new query", function() {
-          query._reset();
+        it("Should call server with _nextServerFromId", function() {
+            // Test 1
+            query._runMessage(140);
+            expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=140");
+
+            // Test 2
+            query._nextServerFromId = 'howdy';
+            query._runMessage(140);
+            expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=140&from_id=howdy");
+        });
+
+        it("Should call DB with _nextDBFromId", function() {
           spyOn(client.dbManager, "loadMessages");
-          query._runMessage(140);
-          expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, '', 140, jasmine.any(Function));
+
+          // Test 1
+          query._runMessage(141);
+          expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, '', 141, jasmine.any(Function));
+
+          // Test 2
+          query._nextDBFromId = 'howdy';
+          query._runMessage(141);
+          expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, 'howdy', 141, jasmine.any(Function));
         });
 
-        it("Should call without from_id", function() {
-            query._runMessage(41);
-            expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=41");
-        });
-
-        it("Should call without from_id if last Message has temp id", function() {
-            query.data.push(conversation.createMessage("hey"));
-            query._runMessage(42);
-            expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=42");
-        });
-
-        it("Should call without from_id if last Message in data is conversation.lastMessage", function() {
-            spyOn(client.dbManager, "loadMessages");
-            var m = new layer.Message({
-                client: client,
-                fromServer: responses.message1,
-            });
-            requests.reset();
-
-            conversation.lastMessage = m;
-            query.data = [m];
-            query._runMessage(43);
-            expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=43");
-            expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, '', 43, jasmine.any(Function));
-        });
-
-        it("Should call with from_id", function() {
-            spyOn(client.dbManager, "loadMessages");
-            var m1 = new layer.Message({
-                client: client,
-                fromServer: responses.message1,
-            });
-            var m2 = new layer.Message({
-                client: client,
-                fromServer: responses.message2,
-            });
-            requests.reset();
-
-            conversation.lastMessage = conversation.createMessage("hi");
-            query.data = [m1, m2];
-            query._runMessage(44);
-            expect(requests.mostRecent().url).toEqual(client.url + conversation.id.replace(/layer\:\/\//, "") + "/messages?page_size=44&from_id=" + query.data[1].id);
-            expect(client.dbManager.loadMessages).toHaveBeenCalledWith(conversation.id, m2.id, 44, jasmine.any(Function));
-
-        });
 
         it("Should refuse to call if already firing with same url", function() {
             var m1 = new layer.Message({
@@ -868,22 +852,28 @@ describe("The Query Class", function() {
             expect(query.isFiring).toBe(true);
         });
 
-        it("Should call dbManager.loadIdentities if its a new query", function() {
-          query._reset();
+        it("Should call database unless there is a _nextDBFromId", function() {
           spyOn(client.dbManager, "loadIdentities");
+
+          // Test 1
           query._runIdentity(140);
           expect(client.dbManager.loadIdentities).toHaveBeenCalledWith(jasmine.any(Function));
+
+          // Test 2
+          query._nextDBFromId = 'howdy';
+          query._runIdentity(141);
+          expect(client.dbManager.loadIdentities.calls.count()).toEqual(1);
         });
 
-        it("Should call without from_id", function() {
-            query._runIdentity(41);
-            expect(requests.mostRecent().url).toEqual(client.url  + "/identities?page_size=41");
-        });
+        it("Should call server with _nextServerFromId", function() {
+            // Test 1
+            query._runIdentity(141);
+            expect(requests.mostRecent().url).toEqual(client.url + "/identities?page_size=141");
 
-        it("Should call with from_id", function() {
-            query.data = [identity];
-            query._runIdentity(44);
-            expect(requests.mostRecent().url).toEqual(client.url  + "/identities?page_size=44&from_id=" + identity.id);
+            // Test 2
+            query._nextServerFromId = 'howdy';
+            query._runIdentity(140);
+            expect(requests.mostRecent().url).toEqual(client.url + "/identities?page_size=140&from_id=howdy");
         });
 
         it("Should refuse to call if already firing with same url", function() {
@@ -962,7 +952,7 @@ describe("The Query Class", function() {
                 success: true,
                 data: [{id: "a"}],
                 xhr: jasmine.any(Object)
-            });
+            }, false);
         });
 
         it("Should not call _run if reached the end of the server's results", function() {
@@ -1050,6 +1040,25 @@ describe("The Query Class", function() {
             spyOn(client, "_getObject").and.returnValue(conversation);
             query._appendResults({data: [JSON.parse(JSON.stringify(responses.conversation2))]});
             expect(client._createObject).toHaveBeenCalledWith(responses.conversation2);
+        });
+
+        it("Should update _nextDBFromId if there is data from DB", function() {
+            query._appendResults({data: [JSON.parse(JSON.stringify(responses.conversation2))]}, true);
+            expect(query._nextDBFromId).toEqual(responses.conversation2.id);
+            expect(query._nextServerFromId).toEqual('');
+        });
+
+        it("Should update _nextServerFromId if there is data from Server", function() {
+            query._appendResults({data: [JSON.parse(JSON.stringify(responses.conversation2))]}, false);
+            expect(query._nextServerFromId).toEqual(responses.conversation2.id);
+            expect(query._nextDBFromId).toEqual('');
+        });
+
+        it("Should not update _nextXXXFromId if there is no data", function() {
+            query._appendResults({data: []}, false);
+            query._appendResults({data: []}, true);
+            expect(query._nextServerFromId).toEqual('');
+            expect(query._nextDBFromId).toEqual('');
         });
 
         it("Should replace the data if dataType is object", function() {
@@ -2188,6 +2197,21 @@ describe("The Query Class", function() {
             query.destroy();
         });
 
+        it("Should call _updateNextFromId for db and server indexes", function() {
+            spyOn(query, "_updateNextFromId").and.returnValue("heyho");
+            query._nextDBFromId = conversation.id;
+            query._nextServerFromId = conversation2.id;
+
+            // Run
+            query._handleConversationRemoveEvent({
+                conversations: [conversation, conversation2]
+            });
+
+            // Posttest
+            expect(query._nextDBFromId).toEqual('heyho');
+            expect(query._nextServerFromId).toEqual('heyho');
+        });
+
         it("Should replace data with a new array removes conversations if dataType is object", function() {
 
             var data = query.data;
@@ -2703,6 +2727,21 @@ describe("The Query Class", function() {
             expect(query.data).toEqual([]);
         });
 
+        it("Should call _updateNextFromId for db and server indexes", function() {
+            spyOn(query, "_updateNextFromId").and.returnValue("heyho");
+            query._nextDBFromId = message1.id;
+            query._nextServerFromId = message2.id;
+
+            // Run
+            query._handleMessageRemoveEvent({
+                messages: [message1, message2]
+            });
+
+            // Posttest
+            expect(query._nextDBFromId).toEqual('heyho');
+            expect(query._nextServerFromId).toEqual('heyho');
+        });
+
         it("Should remove data from results if dataType is instance", function() {
             query.dataType = "instance";
             var data = query.data;
@@ -3042,6 +3081,20 @@ describe("The Query Class", function() {
             // Posttest
             expect(query.data).not.toBe(data);
             expect(query.data).toEqual([]);
+        });
+
+        it("Should call _updateNextFromId for server indexes", function() {
+            spyOn(query, "_updateNextFromId").and.returnValue("heyho");
+            query._nextServerFromId = identity2.id;
+
+            // Run
+            query._handleIdentityRemoveEvent({
+                identities: [identity, identity2]
+            });
+
+            // Posttest
+            expect(query._nextDBFromId).toEqual('');
+            expect(query._nextServerFromId).toEqual('heyho');
         });
 
         it("Should remove data from results if dataType is instance", function() {

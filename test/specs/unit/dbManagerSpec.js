@@ -714,7 +714,7 @@ describe("The DbManager Class", function() {
         dbManager.loadConversations('last_message', null, null, f);
 
         // Posttest
-        expect(dbManager._loadByIndex).toHaveBeenCalledWith('conversations', 'last_message_sent', undefined, false, null, jasmine.any(Function));
+        expect(dbManager._loadByIndex).toHaveBeenCalledWith('conversations', 'last_message_sent', null, false, null, jasmine.any(Function));
         expect(dbManager.getObjects).toHaveBeenCalledWith('messages', [], jasmine.any(Function));
         expect(dbManager._loadConversationsResult).toHaveBeenCalledWith(
           dbManager._getConversationData([conversation]),
@@ -739,7 +739,7 @@ describe("The DbManager Class", function() {
         dbManager.loadConversations('created_at', null, null, f);
 
         // Posttest
-        expect(dbManager._loadByIndex).toHaveBeenCalledWith('conversations', 'created_at', undefined, false, null, jasmine.any(Function));
+        expect(dbManager._loadByIndex).toHaveBeenCalledWith('conversations', 'created_at', null, false, null, jasmine.any(Function));
         expect(dbManager.getObjects).toHaveBeenCalledWith('messages', [], jasmine.any(Function));
         expect(dbManager._loadConversationsResult).toHaveBeenCalledWith(
           dbManager._getConversationData([conversation]),
@@ -765,7 +765,7 @@ describe("The DbManager Class", function() {
         dbManager.loadConversations('created_at', null, null, f);
 
         // Posttest
-        expect(dbManager._loadByIndex).toHaveBeenCalledWith('conversations', 'created_at', undefined, false, null, jasmine.any(Function));
+        expect(dbManager._loadByIndex).toHaveBeenCalledWith('conversations', 'created_at', null, false, null, jasmine.any(Function));
         expect(dbManager.getObjects).toHaveBeenCalledWith('messages', [message.id], jasmine.any(Function));
         expect(dbManager._loadConversationsResult).toHaveBeenCalledWith(
           dbManager._getConversationData([conversation]),
