@@ -110,8 +110,8 @@ class Conversation extends Syncable {
     }
 
     // Setup participants
-    else if (client && this.participants.indexOf(client.userId) === -1) {
-      this.participants.push(client.userId);
+    else if (client && this.participants.indexOf(client.user.userId) === -1) {
+      this.participants.push(client.user.userId);
     }
 
     if (client) client._addConversation(this);
@@ -195,11 +195,11 @@ class Conversation extends Syncable {
     // Make sure this user is a participant (server does this for us, but
     // this insures the local copy is correct until we get a response from
     // the server
-    if (this.participants.indexOf(client.userId) === -1) {
-      this.participants.push(client.userId);
+    if (this.participants.indexOf(client.user.userId) === -1) {
+      this.participants.push(client.user.userId);
     }
 
-    // If there is only one participant, its client.userId.  Not enough
+    // If there is only one participant, its client.user.userId.  Not enough
     // for us to have a good Conversation on the server.  Abort.
     if (this.participants.length === 1) {
       throw new Error(LayerError.dictionary.moreParticipantsRequired);
@@ -367,7 +367,7 @@ class Conversation extends Syncable {
     this.createdAt = new Date(conversation.created_at);
     this.metadata = conversation.metadata;
     this.unreadCount = conversation.unread_message_count;
-    this.isCurrentParticipant = this.participants.indexOf(client.userId) !== -1;
+    this.isCurrentParticipant = this.participants.indexOf(client.user.userId) !== -1;
 
     client._addConversation(this);
 
@@ -534,7 +534,7 @@ class Conversation extends Syncable {
    */
   leave() {
     if (this.isDestroyed) throw new Error(LayerError.dictionary.isDestroyed);
-    this._delete('mode=my_devices&leave=true');
+    this._delete(`mode=${Constants.DELETION_MODE.MY_DEVICES}&leave=true`);
   }
 
   /**
@@ -571,10 +571,10 @@ class Conversation extends Syncable {
     switch (mode) {
       case Constants.DELETION_MODE.ALL:
       case true:
-        queryStr = 'mode=all_participants';
+        queryStr = `mode=${Constants.DELETION_MODE.ALL}`;
         break;
       case Constants.DELETION_MODE.MY_DEVICES:
-        queryStr = 'mode=my_devices&leave=false';
+        queryStr = `mode=${Constants.DELETION_MODE.MY_DEVICES}&leave=false`;
         break;
       default:
         throw new Error(LayerError.dictionary.deletionModeUnsupported);
@@ -608,7 +608,7 @@ class Conversation extends Syncable {
   }
 
   _handleWebsocketDelete(data) {
-    if (data.mode === 'my_devices' && data.from_position) {
+    if (data.mode === Constants.DELETION_MODE.MY_DEVICES && data.from_position) {
       this.getClient()._purgeMessagesByPosition(this.id, data.from_position);
     } else {
       super._handleWebsocketDelete();
@@ -1119,8 +1119,8 @@ class Conversation extends Syncable {
    * @return {layer.Conversation}
    */
   static _createDistinct(options) {
-    if (options.participants.indexOf(options.client.userId) === -1) {
-      options.participants.push(options.client.userId);
+    if (options.participants.indexOf(options.client.user.userId) === -1) {
+      options.participants.push(options.client.user.userId);
     }
 
     const participants = options.participants.sort();

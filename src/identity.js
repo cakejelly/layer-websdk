@@ -45,7 +45,7 @@ class Identity extends Syncable {
     this.isInitializing = true;
 
     // If the options contains a full server definition of the object,
-    // copy it in with _populateFromServer; this will add the Conversation
+    // copy it in with _populateFromServer; this will add the Identity
     // to the Client as well.
     if (options && options.fromServer) {
       this._populateFromServer(options.fromServer);

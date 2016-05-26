@@ -577,7 +577,7 @@ class Query extends Root {
     // For all results, register them with the client
     // If already registered with the client, properties will be updated as needed
     // Database results rather than server results will arrive already registered.
-    results.data.forEach(item => {
+    results.data.forEach((item) => {
       if (!(item instanceof Root)) this.client._createObject(item);
     });
 
@@ -598,7 +598,7 @@ class Query extends Root {
     const data = this.data;
 
     // Insert the results... if the results are a match
-    newResults.forEach(itemIn => {
+    newResults.forEach((itemIn) => {
       let index;
       const item = this.client._getObject(itemIn.id);
       switch (this.model) {
@@ -863,7 +863,7 @@ class Query extends Root {
 
     if (list.length) {
       const data = this.data;
-      list.forEach(conversation => {
+      list.forEach((conversation) => {
         const newIndex = this._getInsertConversationIndex(conversation, data);
         data.splice(newIndex, 0, this._getData(conversation));
       });
@@ -891,7 +891,7 @@ class Query extends Root {
 
   _handleConversationRemoveEvent(evt) {
     const removed = [];
-    evt.conversations.forEach(conversation => {
+    evt.conversations.forEach((conversation) => {
       const index = this._getIndex(conversation.id);
       if (index !== -1) {
         if (conversation.id === this._nextDBFromId) this._nextDBFromId = this._updateNextFromId(index);
@@ -909,7 +909,7 @@ class Query extends Root {
     });
 
     this.totalSize -= removed.length;
-    removed.forEach(removedObj => {
+    removed.forEach((removedObj) => {
       this._triggerChange({
         type: 'remove',
         index: removedObj.index,
@@ -1062,7 +1062,7 @@ class Query extends Root {
     // Add them to our result set and trigger an event for each one
     if (list.length) {
       const data = this.data = this.dataType === Query.ObjectDataType ? [].concat(this.data) : this.data;
-      list.forEach(item => {
+      list.forEach((item) => {
         const index = this._getInsertMessageIndex(item, data);
         data.splice(index, 0, item);
       });
@@ -1071,7 +1071,7 @@ class Query extends Root {
 
       // Index calculated above may shift after additional insertions.  This has
       // to be done after the above insertions have completed.
-      list.forEach(item => {
+      list.forEach((item) => {
         this._triggerChange({
           type: 'insert',
           index: this.data.indexOf(item),
@@ -1084,7 +1084,7 @@ class Query extends Root {
 
   _handleMessageRemoveEvent(evt) {
     const removed = [];
-    evt.messages.forEach(message => {
+    evt.messages.forEach((message) => {
       const index = this._getIndex(message.id);
       if (index !== -1) {
         if (message.id === this._nextDBFromId) this._nextDBFromId = this._updateNextFromId(index);
@@ -1105,7 +1105,7 @@ class Query extends Root {
     });
 
     this.totalSize -= removed.length;
-    removed.forEach(removedObj => {
+    removed.forEach((removedObj) => {
       this._triggerChange({
         type: 'remove',
         target: this._getData(removedObj.data),
@@ -1174,7 +1174,7 @@ class Query extends Root {
 
       // Index calculated above may shift after additional insertions.  This has
       // to be done after the above insertions have completed.
-      list.forEach(item => {
+      list.forEach((item) => {
         this._triggerChange({
           type: 'insert',
           index: this.data.indexOf(item),
@@ -1187,7 +1187,7 @@ class Query extends Root {
 
   _handleIdentityRemoveEvent(evt) {
     const removed = [];
-    evt.identities.forEach(identity => {
+    evt.identities.forEach((identity) => {
       const index = this._getIndex(identity.id);
       if (index !== -1) {
         if (identity.id === this._nextDBFromId) this._nextDBFromId = this._updateNextFromId(index);
@@ -1208,7 +1208,7 @@ class Query extends Root {
     });
 
     this.totalSize -= removed.length;
-    removed.forEach(removedObj => {
+    removed.forEach((removedObj) => {
       this._triggerChange({
         type: 'remove',
         target: this._getData(removedObj.data),

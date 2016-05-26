@@ -8,6 +8,24 @@ describe("The SyncEvent Classes", function() {
             appId: appId,
             url: "https://huh.com"
       });
+
+      client.userId = 'Frodo';
+      client.user = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: client.userId,
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true,
+          sessionOwner: true
+        });
     });
     afterEach(function() {
       jasmine.clock().uninstall();

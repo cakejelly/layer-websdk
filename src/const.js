@@ -86,7 +86,7 @@ module.exports = {
    *                                               a Conversation and not have it come back.
    */
   DELETION_MODE: {
-    ALL: 1,
-    MY_DEVICES: 2,
+    ALL: 'all_participants',
+    MY_DEVICES: 'my_devices',
   },
 };

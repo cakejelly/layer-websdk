@@ -1059,9 +1059,13 @@ describe("The DbManager Class", function() {
            }),
            new layer.XHRSyncEvent({
              target: message.id
+           }),
+           new layer.XHRSyncEvent({
+             target: identity.id
            })
         ]);
       });
+
       it("Should call getObjects for all messageIds", function() {
         spyOn(dbManager, "getObjects");
         dbManager._loadSyncEventRelatedData(rawSyncEvents, function() {});
@@ -1070,10 +1074,8 @@ describe("The DbManager Class", function() {
 
       it("Should call _createMessage for all messageIds", function() {
         var rawMessage = dbManager._getMessageData([message])[0];
-        var fakeCount = 0;
         spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
-          if (fakeCount == 0) {
-            fakeCount++;
+          if (tableName === 'messages') {
             callback([rawMessage]);
           } else {
             callback([]);
@@ -1086,13 +1088,11 @@ describe("The DbManager Class", function() {
 
       it("Should call getObjects for all conversationIds", function() {
         var rawConversation = dbManager._getConversationData([conversation])[0];
-        var fakeCount = 0;
         spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
-          if (fakeCount == 0) {
-            fakeCount++;
-            callback([]);
-          } else {
+          if (tableName === 'conversations') {
             callback([rawConversation]);
+          } else {
+            callback([]);
           }
         });
         dbManager._loadSyncEventRelatedData(rawSyncEvents, function() {});
@@ -1101,13 +1101,11 @@ describe("The DbManager Class", function() {
 
       it("Should call _createConversation for all conversationIds", function() {
         var rawConversation = dbManager._getConversationData([conversation])[0];
-        var fakeCount = 0;
         spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
-          if (fakeCount == 0) {
-            fakeCount++;
-            callback([]);
-          } else {
+          if (tableName === 'conversations') {
             callback([rawConversation]);
+          } else {
+            callback([]);
           }
         });
         spyOn(dbManager, "_createConversation");
@@ -1118,13 +1116,35 @@ describe("The DbManager Class", function() {
       it("Should not call _createConversation for deleted conversationIds", function() {
         var rawConversation = dbManager._getConversationData([conversation])[0];
         spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
-          expect(ids.indexOf(rawSyncEvents[0].target) === -1).toBe(true);
+          if (tableName === 'conversations') {
+            expect(ids.indexOf(rawSyncEvents[0].target) === -1).toBe(true);
+          }
           callback([]);
         });
         spyOn(dbManager, "_createConversation");
         rawSyncEvents[0].operation = "DELETE";
         dbManager._loadSyncEventRelatedData(rawSyncEvents, function() {});
         expect(dbManager._createConversation).not.toHaveBeenCalledWith(rawConversation);
+      });
+
+      it("Should call getObjects for all identityIds", function() {
+        spyOn(dbManager, "getObjects");
+        dbManager._loadSyncEventRelatedData(rawSyncEvents, function() {});
+        expect(dbManager.getObjects).toHaveBeenCalledWith('identities', [identity.id], jasmine.any(Function));
+      });
+
+      it("Should call _createIdentity for all identityIds", function() {
+        var rawIdentity = dbManager._getIdentityData([identity])[0];
+        spyOn(dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
+          if (tableName === 'identities') {
+            callback([rawIdentity]);
+          } else {
+            callback([]);
+          }
+        });
+        spyOn(dbManager, "_createIdentity");
+        dbManager._loadSyncEventRelatedData(rawSyncEvents, function() {});
+        expect(dbManager._createIdentity).toHaveBeenCalledWith(rawIdentity);
       });
 
       it("Should call _loadSyncEventResults", function() {
@@ -1135,6 +1155,7 @@ describe("The DbManager Class", function() {
         var spy = jasmine.createSpy('callback');
         dbManager._loadSyncEventRelatedData(rawSyncEvents, spy);
         expect(dbManager._loadSyncEventResults).toHaveBeenCalledWith(rawSyncEvents, spy);
+        expect(dbManager.getObjects.calls.count()).toEqual(3);
       });
     });
 

@@ -91,102 +91,7 @@ describe("The Client class", function() {
         });
     });
 
-    describe("The _cleanup() method", function() {
-        afterEach(function() {
-            client._messagesHash = client._conversationsHash = client._queriesHash = client._identitiesHash = client._serviceIdentitiesHash = {};
-        });
 
-        it("Should destroy all Messages", function() {
-            // Setup
-            var conversation = client.createConversation(["a"]);
-            var message = conversation.createMessage("Hi").send();
-            conversation.lastMessage = null;
-            message.conversationId = "c1";
-
-            // Pretest
-            expect(client._messagesHash[message.id]).toBe(message);
-
-            // Run
-            client._cleanup();
-
-            // Posttest
-            expect(message.isDestroyed).toBe(true);
-            expect(client._messagesHash).toBe(null);
-        });
-
-        it("Should destroy all Conversations", function() {
-            // Setup
-            var conversation = client.createConversation(["a"]);
-
-            // Pretest
-            expect(client._conversationsHash[conversation.id]).toBe(conversation);
-
-            // Run
-            client._cleanup();
-
-            // Posttest
-            expect(conversation.isDestroyed).toBe(true);
-            expect(client._conversationsHash).toBe(null);
-
-        });
-
-        it("Should destroy all Queries", function() {
-            // Setup
-            client._clientAuthenticated();
-            client._clientReady();
-            var query = client.createQuery({});
-
-            // Pretest
-            expect(client._queriesHash[query.id]).toBe(query);
-
-            // Run
-            client._cleanup();
-
-            // Posttest
-            expect(query.isDestroyed).toBe(true);
-            expect(client._queriesHash).toBe(null);
-        });
-
-        it("Should destroy all Identities", function() {
-            // Setup
-            client._clientAuthenticated();
-            client._clientReady();
-            var userIdentity = new layer.UserIdentity({
-                clientId: client.appId,
-                id: "layer:///identities/1",
-                displayName: "UserIdentity"
-            });
-            var serviceIdentity = new layer.ServiceIdentity({
-                clientId: client.appId,
-                id: "layer:///serviceidentities/2",
-                name: "ServiceIdentity"
-            });
-            client._identitiesHash[userIdentity.id] = userIdentity;
-            client._serviceIdentitiesHash[serviceIdentity.id] = serviceIdentity;
-
-            // Run
-            client._cleanup();
-
-            // Posttest
-            expect(userIdentity.isDestroyed).toBe(true);
-            expect(serviceIdentity.isDestroyed).toBe(true);
-            expect(client._identitiesHash).toBe(null);
-            expect(client._serviceIdentitiesHash).toBe(null);
-        });
-
-        it("Should close the websocket", function() {
-            spyOn(client.socketManager, "close");
-            client._cleanup();
-            expect(client.socketManager.close).toHaveBeenCalled();
-        });
-
-        it("Should do nothing if destroyed", function() {
-            client.isDestroyed = true;
-            client._cleanup();
-            expect(client._conversationsHash).toEqual({});
-            client.isDestroyed = false;
-        });
-    });
 
     describe("The _clientReady() method", function() {
        var superClientReady;
@@ -291,12 +196,116 @@ describe("The Client class", function() {
     describe("Methods that require clientReady", function() {
         beforeEach(function() {
             client.isTrustedDevice = true;
+            client.user = new layer.UserIdentity({
+               userId: client.userId,
+               displayName: "Frodo2",
+               syncState: layer.Constants.SYNC_STATE.LOADING,
+               clientId: client.appId,
+
+           });
             client._clientAuthenticated();
             spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
                callback([]);
             });
             client._clientReady();
 
+        });
+
+        describe("The _cleanup() method", function() {
+            afterEach(function() {
+                client._messagesHash = client._conversationsHash = client._queriesHash = client._identitiesHash = client._serviceIdentitiesHash = {};
+            });
+
+            it("Should destroy all Messages", function() {
+                // Setup
+                var conversation = client.createConversation(["a"]);
+                var message = conversation.createMessage("Hi").send();
+                conversation.lastMessage = null;
+                message.conversationId = "c1";
+
+                // Pretest
+                expect(client._messagesHash[message.id]).toBe(message);
+
+                // Run
+                client._cleanup();
+
+                // Posttest
+                expect(message.isDestroyed).toBe(true);
+                expect(client._messagesHash).toBe(null);
+            });
+
+            it("Should destroy all Conversations", function() {
+                // Setup
+                var conversation = client.createConversation(["a"]);
+
+                // Pretest
+                expect(client._conversationsHash[conversation.id]).toBe(conversation);
+
+                // Run
+                client._cleanup();
+
+                // Posttest
+                expect(conversation.isDestroyed).toBe(true);
+                expect(client._conversationsHash).toBe(null);
+
+            });
+
+            it("Should destroy all Queries", function() {
+                // Setup
+                client._clientAuthenticated();
+                client._clientReady();
+                var query = client.createQuery({});
+
+                // Pretest
+                expect(client._queriesHash[query.id]).toBe(query);
+
+                // Run
+                client._cleanup();
+
+                // Posttest
+                expect(query.isDestroyed).toBe(true);
+                expect(client._queriesHash).toBe(null);
+            });
+
+            it("Should destroy all Identities", function() {
+                // Setup
+                client._clientAuthenticated();
+                client._clientReady();
+                var userIdentity = new layer.UserIdentity({
+                    clientId: client.appId,
+                    id: "layer:///identities/1",
+                    displayName: "UserIdentity"
+                });
+                var serviceIdentity = new layer.ServiceIdentity({
+                    clientId: client.appId,
+                    id: "layer:///serviceidentities/2",
+                    name: "ServiceIdentity"
+                });
+                client._identitiesHash[userIdentity.id] = userIdentity;
+                client._serviceIdentitiesHash[serviceIdentity.id] = serviceIdentity;
+
+                // Run
+                client._cleanup();
+
+                // Posttest
+                expect(userIdentity.isDestroyed).toBe(true);
+                expect(serviceIdentity.isDestroyed).toBe(true);
+                expect(client._identitiesHash).toBe(null);
+                expect(client._serviceIdentitiesHash).toBe(null);
+            });
+
+            it("Should close the websocket", function() {
+                spyOn(client.socketManager, "close");
+                client._cleanup();
+                expect(client.socketManager.close).toHaveBeenCalled();
+            });
+
+            it("Should do nothing if destroyed", function() {
+                client.isDestroyed = true;
+                client._cleanup();
+                expect(client._conversationsHash).toEqual({});
+                client.isDestroyed = false;
+            });
         });
 
         describe("The getConversation() method", function() {

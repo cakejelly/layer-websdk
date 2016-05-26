@@ -183,7 +183,7 @@ class Client extends ClientAuth {
     });
     this._queriesHash = null;
 
-    Object.keys(this._identitiesHash).forEach(id => {
+    Object.keys(this._identitiesHash).forEach((id) => {
       const identity = this._identitiesHash[id];
       if (identity && !identity.isDestroyed) {
         identity.destroy();
@@ -191,7 +191,7 @@ class Client extends ClientAuth {
     });
     this._identitiesHash = null;
 
-    Object.keys(this._serviceIdentitiesHash).forEach(id => {
+    Object.keys(this._serviceIdentitiesHash).forEach((id) => {
       const identity = this._serviceIdentitiesHash[id];
       if (identity && !identity.isDestroyed) {
         identity.destroy();
@@ -503,7 +503,7 @@ class Client extends ClientAuth {
    */
   getIdentity(id, canLoad) {
     if (typeof id !== 'string') throw new Error(LayerError.dictionary.idParamRequired);
-    if (id.indexOf(UserIdentity.prefixUUID) !== 0 && id.indexOf(ServiceIdentity.prefixUUID) !== 0) {
+    if (!UserIdentity.isValidId(id) && !ServiceIdentity.isValidId(id)) {
       id = UserIdentity.prefixUUID + encodeURIComponent(id);
     }
 
@@ -599,7 +599,7 @@ class Client extends ClientAuth {
    * @returns {layer.UserIdentity}
    */
   followIdentity(id) {
-    if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
+    if (!UserIdentity.isValidId(id)) {
       id = UserIdentity.prefixUUID + encodeURIComponent(id);
     }
     let identity = this.getIdentity(id);
@@ -622,7 +622,7 @@ class Client extends ClientAuth {
    * @returns {layer.UserIdentity}
    */
   unfollowIdentity(id) {
-    if (id.indexOf(UserIdentity.prefixUUID) !== 0) {
+    if (!UserIdentity.isValidId(id)) {
       id = UserIdentity.prefixUUID + encodeURIComponent(id);
     }
     let identity = this.getIdentity(id);

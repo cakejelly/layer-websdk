@@ -195,6 +195,10 @@ class Root extends EventClass {
     this.isDestroyed = true;
   }
 
+  static isValidId(id) {
+    return id.indexOf(this.prefixUUID) === 0;
+  }
+
   /**
    * Convert class instance to Plain Javascript Object.
    *

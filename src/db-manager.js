@@ -24,24 +24,24 @@ function getDate(inDate) {
 
 const TABLES = [
   {
-    tableName: 'conversations',
+    name: 'conversations',
     indexes: {
       created_at: ['created_at'],
       last_message_sent: ['last_message_sent']
     },
   },
   {
-    tableName: 'messages',
+    name: 'messages',
     indexes: {
       conversation: ['conversation', 'position']
     },
   },
   {
-    tableName: 'identities',
+    name: 'identities',
     indexes: {},
   },
   {
-    tableName: 'syncQueue',
+    name: 'syncQueue',
     indexes: {},
   },
 ];
@@ -166,17 +166,17 @@ class DbManager extends Root {
 
     TABLES.forEach((tableDef) => {
       try {
-        db.deleteObjectStore(tableDef.tableName);
+        db.deleteObjectStore(tableDef.name);
       } catch (e) {
         // Noop
       }
       try {
-        const store = db.createObjectStore(tableDef.tableName, { keyPath: 'id' });
+        const store = db.createObjectStore(tableDef.name, { keyPath: 'id' });
         Object.keys(tableDef.indexes).forEach(indexName => store.createIndex(indexName, tableDef.indexes[indexName], { unique: false }));
         store.transaction.oncomplete = onComplete;
       } catch (e) {
         // Noop
-        logger.error(`Failed to create object store ${tableDef.tableName}`, e);
+        logger.error(`Failed to create object store ${tableDef.name}`, e);
       }
     });
   }
@@ -246,7 +246,7 @@ class DbManager extends Root {
    * @return {Object[]} identities
    */
   _getIdentityData(identities) {
-    return identities.filter(identity => {
+    return identities.filter((identity) => {
       if (identity.isDestroyed || !identity.isFullIdentity) return false;
 
       if (identity._fromDB) {
@@ -257,7 +257,7 @@ class DbManager extends Root {
       } else {
         return true;
       }
-    }).map(identity => {
+    }).map((identity) => {
       const item = {
         id: identity.id,
         url: identity.url,
@@ -538,7 +538,8 @@ class DbManager extends Root {
    */
   loadMessages(conversationId, fromId, pageSize, callback) {
     const fromMessage = fromId ? this.client.getMessage(fromId) : null;
-    const query = window.IDBKeyRange.bound([conversationId, 0], [conversationId, fromMessage ? fromMessage.position : MAX_SAFE_INTEGER]);
+    const query = window.IDBKeyRange.bound([conversationId, 0],
+      [conversationId, fromMessage ? fromMessage.position : MAX_SAFE_INTEGER]);
     this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, (data) => {
       this._loadMessagesResult(data, callback);
     });
@@ -555,7 +556,8 @@ class DbManager extends Root {
    */
   loadAnnouncements(fromId, pageSize, callback) {
     const fromMessage = fromId ? this.client.getMessage(fromId) : null;
-    const query = window.IDBKeyRange.bound(['announcement', 0], ['announcement', fromMessage ? fromMessage.position : MAX_SAFE_INTEGER]);
+    const query = window.IDBKeyRange.bound(['announcement', 0],
+      ['announcement', fromMessage ? fromMessage.position : MAX_SAFE_INTEGER]);
     this._loadByIndex('messages', 'conversation', query, Boolean(fromId), pageSize, (data) => {
       this._loadMessagesResult(data, callback);
     });
@@ -721,14 +723,22 @@ class DbManager extends Root {
 
     // Load any Messages/Conversations that are targets of operations.
     // Call _createMessage or _createConversation on all targets found.
+    let counter = 0;
+    const maxCounter = 3;
     this.getObjects('messages', messageIds, (messages) => {
       messages.forEach(message => this._createMessage(message));
-      this.getObjects('conversations', conversationIds, (conversations) => {
-        conversations.forEach(conversation => this._createConversation(conversation));
-        this.getObjects('identities', identityIds, () => {
-          this._loadSyncEventResults(syncEvents, callback);
-        });
-      });
+      counter++;
+      if (counter === maxCounter) this._loadSyncEventResults(syncEvents, callback);
+    });
+    this.getObjects('conversations', conversationIds, (conversations) => {
+      conversations.forEach(conversation => this._createConversation(conversation));
+      counter++;
+      if (counter === maxCounter) this._loadSyncEventResults(syncEvents, callback);
+    });
+    this.getObjects('identities', identityIds, (identities) => {
+      identities.forEach(identity => this._createIdentity(identity));
+      counter++;
+      if (counter === maxCounter) this._loadSyncEventResults(syncEvents, callback);
     });
   }
 
@@ -957,7 +967,7 @@ class DbManager extends Root {
   deleteTables(callback) {
     this.onOpen(() => {
       try {
-        const tableNames = TABLES.map(tableDef => tableDef.tableName);
+        const tableNames = TABLES.map(tableDef => tableDef.name);
         const transaction = this.db.transaction(tableNames, 'readwrite');
         tableNames.forEach(tableName => transaction.objectStore(tableName).clear());
         transaction.oncomplete = callback;
