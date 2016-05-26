@@ -172,7 +172,7 @@ class Message extends Syncable {
     this.isInitializing = false;
     if (options && options.fromServer) {
       client._addMessage(this);
-      const status = this.recipientStatus[client.userId];
+      const status = this.recipientStatus[client.user.userId];
       if (status !== Constants.RECEIPT_STATE.READ && status !== Constants.RECEIPT_STATE.DELIVERED) {
         this._sendReceipt('delivery');
       }
@@ -277,7 +277,7 @@ class Message extends Syncable {
     const value = this[pKey] || {};
     const client = this.getClient();
     if (client) {
-      const userId = client.userId;
+      const userId = client.user.userId;
       const conversation = this.getConversation(false);
       if (conversation) {
         conversation.participants.forEach(participant => {

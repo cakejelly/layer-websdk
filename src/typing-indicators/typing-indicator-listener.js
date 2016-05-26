@@ -53,7 +53,7 @@ class TypingIndicatorListener extends Root {
    */
   _clientReady() {
     const client = this._getClient();
-    this.userId = client.userId;
+    this.userId = client.user.userId;
     const ws = client.socketManager;
     ws.on('message', this._handleSocketEvent, this);
     this._startPolling();
