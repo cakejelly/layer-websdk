@@ -174,6 +174,25 @@ class UserIdentity extends Identity {
     }
   }
 
+/**
+ * Update the UserID.
+ *
+ * This will not only update the User ID, but also the ID,
+ * URL, and reregister it with the Client.
+ *
+ * @method _setUserId
+ * @private
+ * @param {string} userId
+ */
+  _setUserId(userId) {
+    const client = this.getClient();
+    if (client) client._removeIdentity(this);
+    this.userId = userId;
+    this.id = UserIdentity.prefixUUID + encodeURIComponent(userId);
+    this.url = `${this.getClient().url}/identities/${this.userId}`;
+    if (client) client._addIdentity(this);
+  }
+
   /**
    * Update the property; trigger a change event, IF the value has changed.
    *
@@ -254,7 +273,8 @@ class UserIdentity extends Identity {
   // Turn a Full Identity into a Basic Identity and delete the Full Identity from the database
   _handleWebsocketDelete(data) {
     this.getClient().dbManager.deleteObjects('identities', [this]);
-    ['firstName', 'lastName', 'emailAddress', 'phoneNumber', 'metadata', 'publicKey', 'isFullIdentity'].forEach(key => delete this[key]);
+    ['firstName', 'lastName', 'emailAddress', 'phoneNumber', 'metadata', 'publicKey', 'isFullIdentity']
+      .forEach(key => delete this[key]);
     this._triggerAsync('identities:unfollow');
   }
 

@@ -105,7 +105,7 @@ class DbManager extends Root {
     if (Object.keys(this.tables).filter(key => this.tables[key]).length === 0) return;
 
     // Open the database
-    const request = window.indexedDB.open('LayerWebSDK_' + this.client.appId + '_' + this.client.userId, DB_VERSION);
+    const request = window.indexedDB.open('LayerWebSDK_' + this.client.appId + '_' + this.client.user.userId, DB_VERSION);
 
     request.onerror = (evt) => {
       logger.error('Database Unable to Open: ', evt.target.error);

@@ -129,29 +129,6 @@ class Client extends ClientAuth {
     });
   }
 
-  /*
-   * @method _clientReady
-   * @private
-   * @fires ready
-   *
-   * WARNING: There is not at this time a recovery or reasonable way to bypass loading this user's
-   * Identity.  It will continue to retry until a value is found and THEN the client will complete authentication.
-   */
-  _clientReady() {
-    if (!this.user) {
-      const user = UserIdentity.load('layer:///identities/' + encodeURIComponent(this.userId), this);
-      user.sessionOwner = true;
-      user.on('identities:loaded', () => {
-        this.user = user;
-        this._clientReady();
-      });
-      user.on('identities:loaded-error', () => setTimeout(() => this._clientReady(), 2000));
-      this.user = user;
-    } else if (this.user.isSynced()) {
-      super._clientReady();
-    }
-  }
-
   /**
    * Cleanup all resources (Conversations, Messages, etc...) prior to destroy or reauthentication.
    *
@@ -1229,11 +1206,19 @@ Client.prototype._scheduleCheckAndPurgeCacheAt = 0;
 
 
 /**
- * The layer.UserIdentity for the authenticated user for this Client's session.
+ * Short hand for getting the userId of the authenticated user.
  *
- * @type {layer.UserIdentity}
+ * Could also just use client.user.userId
+ *
+ * @type {string} userId
  */
-Client.prototype.user = null;
+Object.defineProperty(Client.prototype, 'userId', {
+  enumerable: true,
+  get: function() {
+    return this.user ? this.user.userId : '';
+  },
+  set: function() {},
+});
 
 
 /**

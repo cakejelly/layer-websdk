@@ -471,7 +471,7 @@ class Conversation extends Syncable {
    */
   _patchParticipants(change) {
     this._applyParticipantChange(change);
-    this.isCurrentParticipant = this.participants.indexOf(this.getClient().userId) !== -1;
+    this.isCurrentParticipant = this.participants.indexOf(this.getClient().user.userId) !== -1;
 
     const ops = [];
     change.remove.forEach(id => {

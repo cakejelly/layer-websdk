@@ -155,6 +155,7 @@ LayerError.dictionary = {
   alreadyDestroyed: 'This object has already been destroyed',
   deletionModeUnsupported: 'Call to deletion was made with an unsupported deletion mode',
   sessionAndUserRequired: 'connectWithSession requires both a userId and a sessionToken',
+  invalidUserIdChange: 'The prn field in the Identity Token must match the requested UserID',
 };
 
 module.exports = LayerError;
