@@ -244,11 +244,10 @@ describe("The Util Library", function() {
         var client, conversation, config, message;
         beforeEach(function() {
             client = new layer.Client({appId: "fred"});
-            client.userId = "c";
             client.user = new layer.UserIdentity({
                 clientId: client.appId,
-                userId: client.userId,
-                id: "layer:///identities/" + client.userId,
+                userId: "c",
+                id: "layer:///identities/c",
                 firstName: "first",
                 lastName: "last",
                 phoneNumber: "phone",

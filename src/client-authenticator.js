@@ -241,16 +241,14 @@ class ClientAuthenticator extends Root {
 
     if (this.isTrustedDevice && userId) {
       this._restoreLastSession(userId);
-      user = this._restoreLastUser(userId);
+      user = this._restoreLastUser();
     }
 
     this.user = user || new UserIdentity({
       userId,
       sessionOwner: true,
       clientId: this.appId,
-      id: UserIdentity.prefixUUID + encodeURIComponent(userId),
-      displayName: '',
-      avatarUrl: '',
+      id: userId ? UserIdentity.prefixUUID + encodeURIComponent(userId) : '',
     });
 
     if (this.sessionToken && this.user.userId) {
@@ -289,7 +287,7 @@ class ClientAuthenticator extends Root {
       this._clearStoredData();
     }
     if (this.isTrustedDevice) {
-      user = this._restoreLastUser(userId);
+      user = this._restoreLastUser();
     }
 
     this.onlineManager.start();
@@ -304,7 +302,7 @@ class ClientAuthenticator extends Root {
     });
 
     this.isConnected = true;
-    setTimeout(() => this._authComplete({ session_token: sessionToken }, true), 1);
+    setTimeout(() => this._authComplete({ session_token: sessionToken }, false), 1);
   }
 
   /**
@@ -562,7 +560,7 @@ class ClientAuthenticator extends Root {
     } else {
       // load the user's full Identity and update localStorage
       this.user._load();
-      this.user.on('identities:loaded', () => {
+      this.user.once('identities:loaded', () => {
         if (!this._isPersistedSessionsDisabled()) {
           try {
             // Update the session data in localStorage with our full Identity.
@@ -575,7 +573,7 @@ class ClientAuthenticator extends Root {
         }
         this._clientReady();
       })
-      .on('identities:loaded-error', () => this._clientReady());
+      .once('identities:loaded-error', () => this._clientReady());
     }
   }
 
@@ -742,6 +740,22 @@ class ClientAuthenticator extends Root {
    */
   __adjustAppId() {
     if (this.isConnected) throw new Error(LayerError.dictionary.cantChangeIfConnected);
+  }
+
+ /**
+  * __ Methods are automatically called by property setters.
+  *
+  * Any attempt to execute `this.user = userIdentity` will cause an error to be thrown
+  * if the client is already connected.
+  *
+  * @private
+  * @method __adjustUser
+  * @param {string} value ew appId value
+  */
+  __adjustUser(user) {
+    if (this.isConnected) {
+      throw new Error(LayerError.dictionary.cantChangeIfConnected);
+    }
   }
 
   /* ACCESSOR METHODS END */

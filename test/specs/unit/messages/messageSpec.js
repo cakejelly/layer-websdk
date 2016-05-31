@@ -15,10 +15,10 @@ describe("The Message class", function() {
             reset: true,
             url: "https://doh.com"
         });
-        client.userId = "999";
+
         client.user = new layer.UserIdentity({
           clientId: client.appId,
-          userId: client.userId,
+          userId: "999",
           id: "layer:///identities/" + client.userId,
           firstName: "first",
           lastName: "last",
@@ -658,7 +658,7 @@ describe("The Message class", function() {
         it("Should not trigger change events if this user was NOT sender and another users status changes", function() {
             // Setup
             spyOn(m, "_triggerAsync");
-            m.sender.userId = 'a';
+            m.sender.__userId = 'a';
             m.__recipientStatus = {999: "read", a: "sent", b: "delivered", c: "delivered"};
             m.__recipientStatus[client.userId] = "read";
             var oldValue = m.__recipientStatus;
@@ -673,7 +673,7 @@ describe("The Message class", function() {
         it("Should trigger change events if this user was not the sender and this users status changes to read", function() {
             // Setup
             spyOn(m, "_triggerAsync");
-            m.sender.userId = 'a';
+            m.sender.__userId = 'a';
             m.__recipientStatus = {999: "read", a: "sent", b: "delivered", c: "delivered"};
             m.__recipientStatus[client.userId] = "delivered";
             var oldValue = m.__recipientStatus;
@@ -695,7 +695,7 @@ describe("The Message class", function() {
         it("Should not trigger change events if this user was sender and this users status changes to delivered", function() {
             // Setup
             spyOn(m, "_triggerAsync");
-            m.sender.userId = 'a';
+            m.sender.__userId = 'a';
             m.__recipientStatus = {999: "read", a: "sent", b: "delivered", c: "delivered"};
             m.__recipientStatus[client.userId] = "sent";
             var oldValue = m.__recipientStatus;

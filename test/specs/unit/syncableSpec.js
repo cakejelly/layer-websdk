@@ -18,7 +18,22 @@ describe("The Syncable Class", function() {
             url: "https://huh.com"
         });
         client.sessionToken = "sessionToken";
-        client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: "Frodo",
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true,
+          sessionOwner: true
+        });
         client.isTrustedDevice = true;
         client._clientAuthenticated();
         getObjectsResult = [];

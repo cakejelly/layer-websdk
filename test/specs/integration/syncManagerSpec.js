@@ -13,7 +13,23 @@ describe("SyncManager Integration Tests", function() {
             isTrustedDevice: false
         });
         client.sessionToken = "sessionToken";
-        client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+            clientId: client.appId,
+            userId: "Frodo",
+            id: "layer:///identities/" + "Frodo",
+            firstName: "first",
+            lastName: "last",
+            phoneNumber: "phone",
+            emailAddress: "email",
+            metadata: {},
+            publicKey: "public",
+            avatarUrl: "avatar",
+            displayName: "display",
+            syncState: layer.Constants.SYNC_STATE.SYNCED,
+            isFullIdentity: true,
+            sessionOwner: true
+        });
+
         client._clientAuthenticated();
         conversation = client._createObject(responses.conversation1).conversation;
         requests.reset();

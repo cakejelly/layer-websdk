@@ -85,11 +85,10 @@ describe("Websocket tests", function() {
             appId: "Client1"
         });
 
-        client.userId = "c";
         var identity = new layer.UserIdentity({
           clientId: client.appId,
-          userId: client.userId,
-          id: "layer:///identities/" + client.userId,
+          userId: "c",
+          id: "layer:///identities/" + "c",
           firstName: "first",
           lastName: "last",
           phoneNumber: "phone",

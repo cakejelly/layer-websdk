@@ -24,7 +24,22 @@ describe("The Client class", function() {
             url: "https://huh.com"
         });
         client.sessionToken = "sessionToken";
-        client.userId = "Frodo";
+        client.user = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: "Frodo",
+          id: "layer:///identities/" + client.userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true,
+          sessionOwner: true
+        });
         client.isReady = true;
     });
 
@@ -91,83 +106,6 @@ describe("The Client class", function() {
         });
     });
 
-
-
-    describe("The _clientReady() method", function() {
-       var superClientReady;
-       beforeEach(function() {
-           superClientReady = layer.ClientAuthenticator.prototype._clientReady;
-           spyOn(layer.ClientAuthenticator.prototype, "_clientReady");
-           client.isTrustedDevice = true;
-           client._clientAuthenticated();
-           spyOn(client.dbManager, "getObjects").and.callFake(function(tableName, ids, callback) {
-               callback([]);
-           });
-       });
-       afterEach(function() {
-           layer.ClientAuthenticator.prototype._clientReady = superClientReady;
-       });
-
-       it("Should not call super._clientReady if there is no user", function() {
-            client._clientAuthenticated();
-            client._clientReady();
-            expect(layer.ClientAuthenticator.prototype._clientReady).not.toHaveBeenCalled();
-       });
-
-       it("Should not call super._clientReady if there a user but not loaded yet", function() {
-           client.user = new layer.UserIdentity({
-               userId: "Frodo1",
-               displayName: "Frodo2",
-               syncState: layer.Constants.SYNC_STATE.LOADING,
-               clientId: client.appId,
-
-           });
-           client._clientReady();
-           expect(layer.ClientAuthenticator.prototype._clientReady).not.toHaveBeenCalled();
-       });
-
-       it("Should set the user and load it", function() {
-           expect(client.user).toBe(null);
-           client._clientReady();
-           expect(client.user).toEqual(jasmine.any(layer.UserIdentity));
-           expect(client.user.syncState).toEqual(layer.Constants.SYNC_STATE.LOADING);
-           expect(requests.mostRecent().url).toEqual(client.url + "/identities/Frodo");
-       });
-
-       it("Should call super._clientReady when its loaded", function() {
-           client._clientReady();
-           client.user.syncState = layer.Constants.SYNC_STATE.SYNCED;
-           client.user.trigger('identities:loaded');
-
-           expect(layer.ClientAuthenticator.prototype._clientReady).toHaveBeenCalledWith();
-       });
-
-       it("Should call super._clientReady if its already loaded", function() {
-           client.user = new layer.UserIdentity({
-               userId: "Frodo1",
-               displayName: "Frodo2",
-               syncState: layer.Constants.SYNC_STATE.SYNCED,
-               clientId: client.appId,
-           });
-           client._clientReady();
-           expect(layer.ClientAuthenticator.prototype._clientReady).toHaveBeenCalledWith();
-       });
-
-       it("Should retry on identities:loaded-error", function() {
-           // Setup
-           client._clientReady();
-           expect(layer.ClientAuthenticator.prototype._clientReady).not.toHaveBeenCalled();
-           spyOn(client, "_clientReady");
-
-           // Run
-           client.user.trigger('identities:loaded-error');
-           expect(layer.ClientAuthenticator.prototype._clientReady).not.toHaveBeenCalled();
-           jasmine.clock().tick(2001);
-
-           // Posttest
-           expect(client._clientReady).toHaveBeenCalledWith();
-       });
-    });
 
     describe("The destroy() method", function() {
         afterEach(function() {

@@ -12,11 +12,10 @@ describe("The SyncManager Class", function() {
             url: "https://huh.com"
         });
         client.sessionToken = "sessionToken";
-        client.userId = "Frodo";
         client.user = new layer.UserIdentity({
             clientId: client.appId,
-            userId: client.userId,
-            id: "layer:///identities/" + client.userId,
+            userId: "Frodo",
+            id: "layer:///identities/" + "Frodo",
             firstName: "first",
             lastName: "last",
             phoneNumber: "phone",

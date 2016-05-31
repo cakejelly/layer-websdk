@@ -20,17 +20,10 @@ describe("The DbManager Class", function() {
             isTrustedDevice: true
         });
         client.sessionToken = "sessionToken";
-        client.userId = "Frodo";
-        client._clientAuthenticated();
-        client._clientReady();
-        client.syncManager.queue = [];
-        conversation = client._createObject(responses.conversation1);
-        message = conversation.lastMessage;
-        announcement = client._createObject(responses.announcement);
         identity = new layer.UserIdentity({
           clientId: client.appId,
-          userId: client.userId,
-          id: "layer:///identities/" + client.userId,
+          userId: "Frodo",
+          id: "layer:///identities/" + "Frodo",
           firstName: "first",
           lastName: "last",
           phoneNumber: "phone",
@@ -42,13 +35,21 @@ describe("The DbManager Class", function() {
           syncState: layer.Constants.SYNC_STATE.SYNCED,
           isFullIdentity: true
         });
+        client.user = identity;
+
+        client._clientAuthenticated();
+        client._clientReady();
+        client.syncManager.queue = [];
+        conversation = client._createObject(responses.conversation1);
+        message = conversation.lastMessage;
+        announcement = client._createObject(responses.announcement);
+
         basicIdentity = new layer.UserIdentity({
           clientId: client.appId,
           userId: client.userId,
           id: "layer:///identities/" + client.userId,
           isFullIdentity: false
         });
-        client.user = identity;
         dbManager = client.dbManager;
         dbManager.deleteTables(function() {
           done();

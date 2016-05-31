@@ -48,7 +48,7 @@ describe("The Content class", function() {
 
         conversation = layer.Conversation._createFromServer(responses.conversation2, client).conversation;
         requests.reset();
-        client._clientReady();
+        client.syncManager.queue = [];
     });
     afterEach(function() {
         client.destroy();

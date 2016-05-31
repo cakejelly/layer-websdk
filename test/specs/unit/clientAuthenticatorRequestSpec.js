@@ -22,6 +22,23 @@ describe("The Client Authenticator Requests", function() {
             reset: true,
             url: "https://duh.com"
         });
+        client.user = new layer.UserIdentity({
+          clientId: client.appId,
+          userId: userId,
+          id: "layer:///identities/" + userId,
+          firstName: "first",
+          lastName: "last",
+          phoneNumber: "phone",
+          emailAddress: "email",
+          metadata: {},
+          publicKey: "public",
+          avatarUrl: "avatar",
+          displayName: "display",
+          syncState: layer.Constants.SYNC_STATE.SYNCED,
+          isFullIdentity: true,
+          sessionOwner: true
+        });
+
         client._initComponents();
         client._clientAuthenticated();
         client._clientReady();

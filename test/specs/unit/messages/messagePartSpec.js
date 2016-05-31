@@ -57,7 +57,7 @@ describe("The MessageParts class", function() {
         conversation = layer.Conversation._createFromServer(responses.conversation2, client);
         conversation.lastMessage.destroy();
         requests.reset();
-        client._clientReady();
+        client.syncManager.queue = [];
     });
     afterEach(function() {
         client.destroy();
