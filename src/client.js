@@ -1206,22 +1206,6 @@ Client.prototype._scheduleCheckAndPurgeCacheAt = 0;
 
 
 /**
- * Short hand for getting the userId of the authenticated user.
- *
- * Could also just use client.user.userId
- *
- * @type {string} userId
- */
-Object.defineProperty(Client.prototype, 'userId', {
-  enumerable: true,
-  get: function() {
-    return this.user ? this.user.userId : '';
-  },
-  set: function() {},
-});
-
-
-/**
  * Any Conversation or Message that is part of a Query's results are kept in memory for as long as it
  * remains in that Query.  However, when a websocket event delivers new Messages and Conversations that
  * are NOT part of a Query, how long should they stick around in memory?  Why have them stick around?

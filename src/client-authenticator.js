@@ -233,6 +233,7 @@ class ClientAuthenticator extends Root {
     if (!userId) userId = '';
     let user;
     this.isConnected = false;
+    this.user = null;
     this.onlineManager.start();
     if (!this.isTrustedDevice || !userId || this._isPersistedSessionsDisabled() || this._hasUserIdChanged(userId)) {
       this._clearStoredData();
@@ -242,14 +243,17 @@ class ClientAuthenticator extends Root {
     if (this.isTrustedDevice && userId) {
       this._restoreLastSession(userId);
       user = this._restoreLastUser();
+      if (user) this.user = user;
     }
 
-    this.user = user || new UserIdentity({
-      userId,
-      sessionOwner: true,
-      clientId: this.appId,
-      id: userId ? UserIdentity.prefixUUID + encodeURIComponent(userId) : '',
-    });
+    if (!this.user) {
+      this.user = new UserIdentity({
+        userId,
+        sessionOwner: true,
+        clientId: this.appId,
+        id: userId ? UserIdentity.prefixUUID + encodeURIComponent(userId) : '',
+      });
+    }
 
     if (this.sessionToken && this.user.userId) {
       this._sessionTokenRestored();
@@ -282,24 +286,26 @@ class ClientAuthenticator extends Root {
    */
   connectWithSession(userId, sessionToken) {
     let user;
+    this.user = null;
     if (!userId || !sessionToken) throw new Error(LayerError.dictionary.sessionAndUserRequired);
     if (!this.isTrustedDevice || this._isPersistedSessionsDisabled() || this._hasUserIdChanged(userId)) {
       this._clearStoredData();
     }
     if (this.isTrustedDevice) {
       user = this._restoreLastUser();
+      if (user) this.user = user;
     }
 
     this.onlineManager.start();
 
-    this.user = user || new UserIdentity({
-      userId,
-      sessionOwner: true,
-      clientId: this.appId,
-      id: UserIdentity.prefixUUID + encodeURIComponent(userId),
-      displayName: '',
-      avatarUrl: '',
-    });
+    if (!this.user) {
+      this.user = new UserIdentity({
+        userId,
+        sessionOwner: true,
+        clientId: this.appId,
+        id: UserIdentity.prefixUUID + encodeURIComponent(userId),
+      });
+    }
 
     this.isConnected = true;
     setTimeout(() => this._authComplete({ session_token: sessionToken }, false), 1);
@@ -750,7 +756,7 @@ class ClientAuthenticator extends Root {
   *
   * @private
   * @method __adjustUser
-  * @param {string} value ew appId value
+  * @param {string} user - new Identity object
   */
   __adjustUser(user) {
     if (this.isConnected) {
@@ -1150,6 +1156,21 @@ Object.defineProperty(ClientAuthenticator.prototype, 'logLevel', {
   enumerable: false,
   get: function get() { return logger.level; },
   set: function set(value) { logger.level = value; },
+});
+
+/**
+ * Short hand for getting the userId of the authenticated user.
+ *
+ * Could also just use client.user.userId
+ *
+ * @type {string} userId
+ */
+Object.defineProperty(ClientAuthenticator.prototype, 'userId', {
+  enumerable: true,
+  get: function get() {
+    return this.user ? this.user.userId : '';
+  },
+  set: function set() {},
 });
 
 /**
