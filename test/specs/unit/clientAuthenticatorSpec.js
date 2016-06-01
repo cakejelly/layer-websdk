@@ -1249,6 +1249,34 @@ describe("The Client Authenticator Class", function() {
                 expect(client._clientReady).toHaveBeenCalledWith();
             });
 
+            it("Should set user.displayName if needed on identities:loaded-error", function() {
+                // Setup
+                client.user.isFullIdentity = false;
+                client.user.displayName = '';
+                spyOn(client, "_isPersistedSessionsDisabled").and.returnValue(true);
+
+                // Run
+                client._loadUser();
+                client.user.trigger('identities:loaded-error');
+
+                // Posttest
+                expect(client.user.displayName).toEqual('You');
+            });
+
+            it("Should not set user.displayName if not needed on identities:loaded-error", function() {
+                // Setup
+                client.user.isFullIdentity = false;
+                client.user.displayName = 'Me';
+                spyOn(client, "_isPersistedSessionsDisabled").and.returnValue(true);
+
+                // Run
+                client._loadUser();
+                client.user.trigger('identities:loaded-error');
+
+                // Posttest
+                expect(client.user.displayName).toEqual('Me');
+            });
+
         });
 
         describe("The _sessionTokenRestored() method", function () {

@@ -579,7 +579,10 @@ class ClientAuthenticator extends Root {
         }
         this._clientReady();
       })
-      .once('identities:loaded-error', () => this._clientReady());
+      .once('identities:loaded-error', () => {
+        if (!this.user.displayName) this.user.displayName = this.defaultOwnerDisplayName;
+        this._clientReady();
+      });
     }
   }
 
@@ -1124,6 +1127,13 @@ ClientAuthenticator.prototype.dbManager = null;
  * This ID is used to differentiate this instance with instances that may run in other tabs of the browser.
  */
 ClientAuthenticator.prototype.id = '';
+
+/**
+ * If a display name is not loaded for the session owner, use this name.
+ *
+ * @type {string}
+ */
+ClientAuthenticator.prototype.defaultOwnerDisplayName = 'You';
 
 /**
  * Is true if the client is authenticated and connected to the server;
