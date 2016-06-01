@@ -766,6 +766,11 @@ class ClientAuthenticator extends Root {
     }
   }
 
+  // Virtual methods
+  _addIdentity(identity) {}
+  _removeIdentity(identity) {}
+
+
   /* ACCESSOR METHODS END */
 
 

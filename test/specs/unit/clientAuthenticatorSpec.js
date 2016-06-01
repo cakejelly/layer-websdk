@@ -22,8 +22,6 @@ describe("The Client Authenticator Class", function() {
             reset: true,
             url: "https://duh.com"
         });
-        client._addIdentity = function() {};
-        client._removeIdentity = function() {};
         spyOn(layer.Syncable.prototype, "getClient").and.returnValue(client);
 
         userIdentity = new layer.UserIdentity({
