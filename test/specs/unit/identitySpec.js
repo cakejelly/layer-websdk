@@ -408,6 +408,14 @@ describe("The Identity Class", function() {
       });
 
       describe("The _setUserId() method", function() {
+        it("Should fail if no client", function() {
+          spyOn(client.user, "getClient").and.returnValue(null);
+          expect(function() {
+            client.user._setUserId('Frodo the Dodo');
+          }).toThrowError(layer.LayerError.dictionary.clientMissing);
+          expect(layer.LayerError.dictionary.clientMissing.length > 0).toBe(true);
+        });
+
         it("Should update userId", function() {
           // Run
           client.user._setUserId('Frodo the Dodo');

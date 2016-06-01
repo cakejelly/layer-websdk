@@ -229,8 +229,7 @@ class ClientAuthenticator extends Root {
    * @param {string} userId - User ID of the user you are logging in as
    * @returns {layer.ClientAuthenticator} this
    */
-  connect(userId) {
-    if (!userId) userId = '';
+  connect(userId = '') {
     let user;
     this.isConnected = false;
     this.user = null;

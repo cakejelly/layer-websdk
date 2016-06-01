@@ -186,12 +186,13 @@ class UserIdentity extends Identity {
  */
   _setUserId(userId) {
     const client = this.getClient();
-    if (client) client._removeIdentity(this);
+    if (!client) throw new Error(LayerError.dictionary.clientMissing);
+    client._removeIdentity(this);
     this.__userId = userId;
     const encoded = encodeURIComponent(userId);
     this.id = UserIdentity.prefixUUID + encoded;
     this.url = `${this.getClient().url}/identities/${encoded}`;
-    if (client) client._addIdentity(this);
+    client._addIdentity(this);
   }
 
   /**
