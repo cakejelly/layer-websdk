@@ -480,17 +480,25 @@ class Query extends Root {
     this.isFiring = false;
     this._firingRequest = '';
     if (results.success) {
+
+      // If there are results, use them
       if (results.data.length) {
         this._retryCount = 0;
         this._appendResults(results);
         this.totalSize = results.xhr.getResponseHeader('Layer-Count');
-      } else if (this.size === 0) {
+      }
+
+      // If there are no results, and we have no results, there may be data still syncing to the server; so poll for a bit
+      else if (this.size === 0) {
         if (this._retryCount < Query.MaxRetryCount) {
           setTimeout(() => {
             this._retryCount++;
             this._run();
           }, 1500);
-        } else {
+        }
+
+        // We've polled for a bit.  No data.  Presume there is in fact no data
+        else {
           this._retryCount = 0;
           this._triggerChange({
             type: 'data',
