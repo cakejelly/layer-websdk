@@ -1,5 +1,9 @@
 # Javascript SDK Change Log
 
+# 1.0.6
+
+* Query will retry when no data is detected in case the server has not yet received data for this user.
+
 # 1.0.5
 
 * Fixes bug in layer.Content.refreshContent where expiration is improperly set

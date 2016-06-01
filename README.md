@@ -25,7 +25,7 @@ Simplest approach to install the Web SDK is to add the following script tag:
 <script src='//cdn.layer.com/sdk/1.0/layer-websdk.min.js'></script>
 ```
 
-* For stricter code control, use `//cdn.layer.com/sdk/1.0.5/layer-websdk.min.js` instead.
+* For stricter code control, use `//cdn.layer.com/sdk/1.0.6/layer-websdk.min.js` instead.
 
 All classes can then be accessed via the `layer` namespace:
 
