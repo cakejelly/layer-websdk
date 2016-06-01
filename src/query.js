@@ -480,8 +480,26 @@ class Query extends Root {
     this.isFiring = false;
     this._firingRequest = '';
     if (results.success) {
-      this._appendResults(results);
-      this.totalSize = results.xhr.getResponseHeader('Layer-Count');
+      if (results.data.length) {
+        this._retryCount = 0;
+        this._appendResults(results);
+        this.totalSize = results.xhr.getResponseHeader('Layer-Count');
+      } else if (this.size === 0) {
+        if (this._retryCount < Query.MaxRetryCount) {
+          setTimeout(() => {
+            this._retryCount++;
+            this._run();
+          }, 1500);
+        } else {
+          this._retryCount = 0;
+          this._triggerChange({
+            type: 'data',
+            data: [],
+            query: this,
+            target: this.client,
+          });
+        }
+      }
     } else {
       this.trigger('error', { error: results.data });
     }
@@ -1178,6 +1196,10 @@ Query.prototype.isFiring = false;
  * @private
  */
 Query.prototype._firingRequest = '';
+
+Query.prototype._retryCount = 0;
+
+Query.MaxRetryCount = 20;
 
 Query._supportedEvents = [
   /**
