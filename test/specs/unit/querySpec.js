@@ -810,7 +810,7 @@ describe("The Query Class", function() {
                 }
             }, requestUrl);
             jasmine.clock().tick(1600);
-            expect(query._run.calls.count()).toEqual(10);
+            expect(query._run.calls.count()).toEqual(20);
             expect(query._triggerChange).toHaveBeenCalled();
         });
     });
