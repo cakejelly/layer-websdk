@@ -45,6 +45,33 @@
   * Removes Conversation.lastMessage from cache once its no longer a query result.
   * Fixes cache cleanup on deleting a Query.
 
+# 1.0.7
+
+* Improves logic around reconnecting websockets to validate that the session is still valid.
+* Removes tests for Message `ffffffff....` which were used to validate the session is still valid.
+
+# 1.0.6
+
+* Query will retry when no data is detected in case the server has not yet received data for this user.
+
+# 1.0.5
+
+* Fixes bug in layer.Content.refreshContent where expiration is improperly set
+* Fixes bug in layer.Query when `dataType` is layer.Query.ObjectDataType which fails to update data for a `messages:read` event
+
+## 1.0.4
+
+* Fixes parsing of Identity Token to handle URL Encoded strings
+
+## 1.0.3
+
+* Fixes support for Query.dataType == layer.Query.InstanceDataType in handling Message ID change events.
+
+## 1.0.2
+
+* Fixes support for the `sessionToken` in the constructor; broken with the introduction of the `isTrustedDevice` property. This is used as part of the [Alternate Authentication Process](https://developer.layer.com/docs/websdk#the-alternate-authentication-process).
+
+
 ## 1.0.1
 
 * Adds isTrustedDevice property to layer.Client which defaults to false. If this is false, session tokens will NOT be written to localStorage, and will not be restored next time the page reloads.

@@ -902,25 +902,25 @@ describe("The Websocket Socket Manager Class", function() {
     });
 
     describe("The _scheduleReconnect() method", function() {
-      it("Should schedule connect to be called using exponential backoff", function() {
+      it("Should schedule _validateSessionBeforeReconnect to be called using exponential backoff", function() {
         var tmp = layer.Util.getExponentialBackoffSeconds;
         layer.Util.getExponentialBackoffSeconds = function() {return 100;}
         websocketManager._lostConnectionCount = 10;
-        spyOn(websocketManager, "connect");
+        spyOn(websocketManager, "_validateSessionBeforeReconnect");
         expect(websocketManager._reconnectId).toEqual(0);
 
         // Run
         websocketManager._scheduleReconnect();
         expect(websocketManager._reconnectId).not.toEqual(0);
-        expect(websocketManager.connect).not.toHaveBeenCalled();
+        expect(websocketManager._validateSessionBeforeReconnect).not.toHaveBeenCalled();
 
         // Midtest
         jasmine.clock().tick(1000 * layer.Util.getExponentialBackoffSeconds(100, 10) - 1);
-        expect(websocketManager.connect).not.toHaveBeenCalled();
+        expect(websocketManager._validateSessionBeforeReconnect).not.toHaveBeenCalled();
 
         // Posttest
         jasmine.clock().tick(10);
-        expect(websocketManager.connect).toHaveBeenCalled();
+        expect(websocketManager._validateSessionBeforeReconnect).toHaveBeenCalled();
 
         // Cleanup
         layer.Util.getExponentialBackoffSeconds = tmp;
@@ -931,5 +931,36 @@ describe("The Websocket Socket Manager Class", function() {
         websocketManager._scheduleReconnect();
         expect(websocketManager._reconnectId).toEqual(0);
       });
+    });
+
+    describe("The _validateSessionBeforeReconnect() method", function() {
+       it("Should validate the session", function() {
+          spyOn(client, "xhr");
+          websocketManager._validateSessionBeforeReconnect();
+          expect(client.xhr).toHaveBeenCalledWith({
+              url: "/",
+              sync: false,
+              method: "GET"
+            }, jasmine.any(Function));
+       });
+
+       it("Should call connect if successful", function() {
+          spyOn(websocketManager, "connect");
+          websocketManager._validateSessionBeforeReconnect();
+          requests.mostRecent().response({
+              status: 200
+          });
+          expect(websocketManager.connect).toHaveBeenCalledWith();
+       });
+
+       it("Should not call connect if unsuccessful", function() {
+          spyOn(websocketManager, "connect");
+          websocketManager._validateSessionBeforeReconnect();
+          requests.mostRecent().response({
+              status: 400
+          });
+          expect(websocketManager.connect).not.toHaveBeenCalled();
+       });
+
     });
 });

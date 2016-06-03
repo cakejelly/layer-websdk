@@ -532,7 +532,27 @@ class SocketManager extends Root {
     const maxDelay = (this.client.onlineManager.pingFrequency - 1000) / 1000;
     const delay = Utils.getExponentialBackoffSeconds(maxDelay, Math.min(15, this._lostConnectionCount));
     logger.debug('Websocket Reconnect in ' + delay + ' seconds');
-    this._reconnectId = setTimeout(this.connect.bind(this), delay * 1000);
+    this._reconnectId = setTimeout(this._validateSessionBeforeReconnect.bind(this), delay * 1000);
+  }
+
+  /**
+   * Before the scheduled reconnect can call `connect()` validate that we didn't lose the websocket
+   * due to loss of authentication.
+   *
+   * @method _validateSessionBeforeReconnect
+   * @private
+   */
+  _validateSessionBeforeReconnect() {
+    if (this.isDestroyed || !this.client.isOnline) return;
+
+    this.client.xhr({
+      url: '/',
+      method: 'GET',
+      sync: false,
+    }, (result) => {
+      if (result.success) this.connect();
+      // if not successful, the this.client.xhr will handle reauthentication
+    });
   }
 }
 
